@@ -1,7 +1,7 @@
 # ComPort class used in Qt terminal programs
 
 from PySide6.QtCore import QIODevice, Qt, Slot
-from PySide6.QtSerialPort import QSerialPort
+from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 from PySide6.QtWidgets import QPushButton, QComboBox, QGridLayout, QLineEdit, QLabel, QGroupBox
 
 
@@ -11,6 +11,8 @@ class ComPort(QGroupBox):  # QWidget
         self.setTitle('Serial port ' + name)
         # add layout
         layout = QGridLayout(self)
+        ser_info = QSerialPortInfo()
+        self.b_portlist = [port.portName() for port in ser_info.availablePorts()]  # list of available COM ports
         # baud rates
         self.b_rates = ['9600', '14400', '19200', '28800', '33600', '38400', '57600', '115200', '230400', '460800',
                         '921600']
@@ -29,8 +31,10 @@ class ComPort(QGroupBox):  # QWidget
         self.port_number_label.setAlignment(Qt.AlignRight)
         layout.addWidget(self.port_number_label, 0, 1)
         #
-        self.port_field = QLineEdit()
-        self.port_field.setAlignment(Qt.AlignCenter)
+        self.port_field = QComboBox()
+        self.port_field.addItems(self.b_portlist)
+        if self.b_portlist.count(name):
+            self.port_field.setCurrentIndex(self.b_portlist.index(name))  # set default item
         layout.addWidget(self.port_field, 0, 2)
         #
         self.open_btn = QPushButton('Open')
@@ -62,31 +66,27 @@ class ComPort(QGroupBox):  # QWidget
     def open_port(self):
         n = 0
         if self.com_opened == 0:
-            com_num = self.port_field.text()
+            com_num = self.port_field.currentText()
             br = self.baud_rates.currentText()
             self.ser.setBaudRate(int(br))
             if com_num:
-                if com_num.isdigit():
-                    self.ser.setPortName('COM' + com_num)
-                    self.ser.open(QIODevice.ReadWrite)
-                    if self.ser.isOpen():
-                        self.info_label.setText('COM' + com_num + ' opened')
-                        self.info_label.setStyleSheet('color: #00dd00;')  # green
-                        self.com_opened = 1
-                    else:
-                        self.info_label.setText('Can not open')
-                        self.info_label.setStyleSheet('color: red;')
-                        self.com_opened = 0
+                self.ser.setPortName(com_num)
+                self.ser.open(QIODevice.ReadWrite)
+                if self.ser.isOpen():
+                    self.info_label.setText(com_num + ' opened')
+                    self.info_label.setStyleSheet('color: #00dd00;')  # green
+                    self.com_opened = 1
                 else:
-                    self.info_label.setText('Digits only!')
+                    self.info_label.setText('Can not open')
                     self.info_label.setStyleSheet('color: red;')
+                    self.com_opened = 0
             else:
                 while (n < self.nmax) and (self.com_opened == 0):
                     n = n + 1
-                    self.ser.setPortName('COM' + str(n))
+                    self.ser.setPortName(str(n))
                     res = self.ser.open(QIODevice.ReadWrite)
                     if res:  # port was successfully opened
-                        self.info_label.setText('COM' + str(n) + ' opened')
+                        self.info_label.setText(str(n) + ' opened')
                         self.info_label.setStyleSheet('color: #00dd00;')  # green
                         self.com_opened = 1
                 if self.com_opened == 0:
