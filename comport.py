@@ -38,12 +38,12 @@ class ComPort(QGroupBox):  # QWidget
         layout.addWidget(self.port_field, 0, 2)
         #
         self.open_btn = QPushButton('Open')
-        self.open_btn.setStyleSheet('background-color: #00dd00;')
+        # self.open_btn.setStyleSheet('background-color: #00dd00;')
         layout.addWidget(self.open_btn, 0, 3)
         self.open_btn.clicked.connect(self.open_port)
         #
         self.baud_rate_label = QLabel('Baud rate: ')
-        self.baud_rate_label.setStyleSheet('color: #555555;')
+        # self.baud_rate_label.setStyleSheet('color: #555555;')
         self.baud_rate_label.setAlignment(Qt.AlignRight)
         layout.addWidget(self.baud_rate_label, 1, 1)
         #
@@ -54,7 +54,7 @@ class ComPort(QGroupBox):  # QWidget
         layout.addWidget(self.baud_rates, 1, 2)
         #
         self.close_btn = QPushButton('Close')
-        self.close_btn.setStyleSheet('background-color: red;')
+        # self.close_btn.setStyleSheet('background-color: red;')
         layout.addWidget(self.close_btn, 1, 3)
         self.close_btn.clicked.connect(self.close_port)
         # serial port

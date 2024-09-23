@@ -1,7 +1,7 @@
 # Controls for terminals
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QCheckBox
+from PySide6.QtWidgets import QWidget, QPushButton, QHBoxLayout, QVBoxLayout, QCheckBox, QTableView
 from PySide6.QtWidgets import QTabWidget, QTextEdit, QGridLayout, QButtonGroup, QLineEdit, QGroupBox
         
 
@@ -93,6 +93,27 @@ class Notebook(QTabWidget):
     def __init__(self):
         super().__init__()
 
+    # method to add Tables with QTableView
+    def add_tab_tableview(self, tab_name, model, handler):
+        # create new tab
+        tab = QWidget()
+        self.addTab(tab, tab_name)
+        layout = QVBoxLayout(tab)
+        # add buttons' group
+        group = QButtonGroup(self)
+        group.buttonClicked.connect(handler)
+        # create QTableView
+        table_view = QTableView()
+        table_view.setModel(model)
+        table_view.setSortingEnabled(True)
+        table_view.resizeColumnsToContents()
+        table_view.resizeRowsToContents()
+        layout.addWidget(table_view)
+        # Manually set the row height if needed
+        # row_height = 25  # Set your desired row height here
+        # for row in range(model.rowCount()):
+        #     table_view.setRowHeight(row, row_height)
+
     # method to add Tables with buttons
     def add_tab_btn(self, tab_name, btn_data, handler):
         # create new table
@@ -135,7 +156,6 @@ class Notebook(QTabWidget):
                 fld.any_field.setText(tab_data[each])
             except Exception:
                 pass
-
 
 class LogMonitor(QGroupBox):
     def __init__(self):
