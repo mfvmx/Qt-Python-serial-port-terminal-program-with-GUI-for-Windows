@@ -66,17 +66,13 @@ T1_0 = [
     ["Blank", b'\x24\x42\x42\x7C\x23', "", "#c9c3c9"],
     ["Purple", b'\x24\x42\x43\x7B\x23', "", "#d900ff"],
     ["Black", b'\x24\x42\x44\x7A\x23', "", "#333333"],
+]
+
+T1_1 = [
     ["Green", b'\x24\x42\x47\x77\x23', "", "#0fd920"],
     ["Checker", b'\x24\x42\x48\x76\x23', "", "#7c7c7c"],
     ["Red", b'\x24\x42\x52\x6C\x23', "", "#f20505"],
     ["Yellow", b'\x24\x42\x5B\x63\x23', "", "yellow"],
-]
-
-T1_1 = [
-    ["Get baud rate", "AT+IPR?", "", "#33CCCC"],
-    ["Set 9600 bps", "AT+IPR=9600", "", "#33CCCC"],
-    ["Set 115200 bps", "AT+IPR=115200", "", "#33CCCC"],
-    ["Set auto baud rate", "AT+IPR=0", "", "#33CCCC"],
 ]
 
 T1 = [T1_0, T1_1]

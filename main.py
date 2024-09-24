@@ -1,14 +1,14 @@
 # This is a Qt (PySide) terminal program
 
 
-from PySide6.QtCore import QIODevice
 from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QApplication, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit
+from PySide6.QtWidgets import QApplication, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSizePolicy, QGridLayout, QSplitter
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
-from PySide6.QtCore import QFile, QIODevice
+from PySide6.QtCore import QFile, QIODevice, QThread, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
+import socket
 import sys
 import folium
 from folium import JsCode
@@ -18,6 +18,7 @@ from comport import ComPort
 from controls import *
 from messageparser import *
 from tablemodel import *
+from tcpiphandler import TcpIpHandler
 from variables import *
 
 ###############################################################
@@ -29,8 +30,8 @@ nmax = 300  # max number of COM port, used in get_free_ports()
 com_port_name = "COM19"
 default_baud_rate = "115200"
 
-window_min_height = 900
-window_min_width = 1200
+window_min_height = 1000
+window_min_width = 1400
 
 term_min_width = 400
 
@@ -53,6 +54,12 @@ class MainWindow(QMainWindow):
         super().__init__()
         # Initialize a buffer to store incoming data
         self.rx_buffer = bytearray()
+        # Initialize connection type (serial or tcpip)
+        # main_win.start_tcpip_connection('127.0.0.1', 12345)
+        # main_win.stop_tcpip_connection()
+        self.connection_type = 'serial'  # Default to serial
+        self.tcpip_handler = None
+        
         # Add an instance variable to store the Developer Tools window
         self.dev_tools = None
 
@@ -62,31 +69,16 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         # create vertical layout
-        infovbox = QVBoxLayout(central_widget)
+        # infovbox = QHBoxLayout(central_widget)
+        grid_layout = QGridLayout(central_widget)
         self.modelPitTimes = CustomTableModelPitTime(device_status_table)
         self.modelDeviceSatus = TableModelStatus(device_status_table)
         self.modelDeviceLocation = TableModelLocation(device_location_table)
-        # self.tableboxStatus = QTableView()
-        # self.tableboxStatus.setModel(self.modelDeviceSatus)
-        # self.tableboxStatus.setSortingEnabled(True)
-        # self.tableboxStatus.resizeColumnsToContents()
-        # Manually set the row height
-        # row_height = 10  # Set your desired row height here
-        # for row in range(self.tableboxStatus.model().rowCount()):
-        #     self.tableboxStatus.setRowHeight(row, row_height)
-        # self.tableboxStatusPitTimes = QTableView()
-        # self.tableboxStatusPitTimes.setModel(self.modelPitTimes)
-        # self.tableboxStatusPitTimes.setSortingEnabled(True)
-        # self.tableboxStatusPitTimes.resizeColumnsToContents()
-        # self.tableboxStatusLocation = QTableView()
-        # self.tableboxStatusLocation.setModel(self.modelDeviceLocation)
-        # self.tableboxStatusLocation.setSortingEnabled(True)
-        # self.tableboxStatusLocation.resizeColumnsToContents()
 
         # create hbox (horizontal layout)
-        hbox = QHBoxLayout()
+        # sidebox = QVBoxLayout()
         # verticalTableLayout = infovbox()
-        infovbox.addLayout(hbox)
+        # infovbox.addLayout(sidebox)
         # create term
         self.term = QTextEdit()
         self.term.setReadOnly(True)
@@ -99,77 +91,99 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
                 """
         )
-        # hbox.addWidget(self.term)
+        # sidebox.addWidget(self.term)
         # infovbox.addWidget(self.term) # Bottom of the window
-        self.map = folium.Map(location=[34.138595, -83.818801], zoom_start=13)
-        # Initialize the data array
-        self.data_array = [
-            {"id": 1, "longitude": -83.818801, "latitude": 34.138595}  # Initial marker data
-        ]
+        self.map = folium.Map(location=[34.14400, -83.816108], zoom_start=16)
+
+            # Add Esri World Imagery (satellite view)
+        folium.TileLayer(
+            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            attr="Esri",
+            name="Esri Satellite",
+            overlay=False,
+            control=True
+        ).add_to(self.map)
+        # Add LayerControl to switch between different views
+        folium.LayerControl().add_to(self.map)
         self.mapweb_view = QWebEngineView()
         self.enable_developer_tools()
 
         # Binding Developer Tools to a keypress, for example, F12
         self.shortcut = QShortcut(QKeySequence("F12"), self)
         self.shortcut.activated.connect(self.open_developer_tools)
-        self.testshortcut = QShortcut(QKeySequence("F11"), self)
-        self.testshortcut.activated.connect(self.test_js_execution)
-        self.testshortcut1 = QShortcut(QKeySequence("F10"), self)
-        self.testshortcut1.activated.connect(self.test_js_execution2)
 
         self.update_map()
         self.expose_map_js()
-        # self.test_js_execution()
-        # w.setHtml(m.get_root().render())
-        infovbox.addWidget(self.mapweb_view)
+
+        # Set the size policy of self.mapweb_view to expanding
+        # self.mapweb_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        # Add self.mapweb_view to the layout with a higher stretch factor
+        # infovbox.addWidget(self.mapweb_view, stretch=2)
 
         self.table_notebook = Notebook()
         # add tables to the notebook
         self.table_notebook.add_tab_tableview("Status", self.modelDeviceSatus, self.send)
         self.table_notebook.add_tab_tableview("Pit Times", self.modelPitTimes, self.send)
         self.table_notebook.add_tab_tableview("Location", self.modelDeviceLocation, self.send)
-        hbox.addWidget(self.table_notebook)
-
-        # verticalTableLayout.addWidget(self.tableboxStatus)
-        # verticalTableLayout.addWidget(self.tableboxStatusPitTimes)
-        # verticalTableLayout.addWidget(self.tableboxStatusLocation)
-        # hbox.addLayout(verticalTableLayout)
-        hbox.addWidget(self.table_notebook)
+        # self.table_notebook.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
+        # sidebox.addWidget(self.table_notebook)
         # create vbox (vertical layout)
-        vbox = QVBoxLayout()
+        # vbox = QVBoxLayout()
         # add vbox to main window
-        hbox.addLayout(vbox)
+        # sidebox.addLayout(vbox)
         # create Controls and bind handlers
-        self.controls = Controls()
-        self.controls.clear_btn.clicked.connect(self.clear_term)
-        self.controls.copy_btn.clicked.connect(self.copy)
-        self.controls.cut_btn.clicked.connect(self.cut)
-        self.controls.info_btn.clicked.connect(self.ports_info)
-        self.controls.free_btn.clicked.connect(self.get_free_ports)
-        self.controls.time_box.toggled.connect(self.time_box_toggled)
-        self.controls.time_box.setChecked(True)
-        self.controls.echo_box.toggled.connect(self.echo_box_toggled)
+        # self.controls = Controls()
+        # self.controls.clear_btn.clicked.connect(self.clear_term)
+        # self.controls.copy_btn.clicked.connect(self.copy)
+        # self.controls.cut_btn.clicked.connect(self.cut)
+        # self.controls.info_btn.clicked.connect(self.ports_info)
+        # self.controls.free_btn.clicked.connect(self.get_free_ports)
+        # self.controls.time_box.toggled.connect(self.time_box_toggled)
+        # self.controls.time_box.setChecked(True)
+        # self.controls.echo_box.toggled.connect(self.echo_box_toggled)
         # create Com port
         self.port = ComPort(com_port_name, default_baud_rate)
         self.port.ser.readyRead.connect(self.on_port_rx)
         self.port.ser.errorOccurred.connect(self.port_error)
+        # add controls to side panel
+        # vbox.addWidget(self.port)
         # create any_panels and bind handlers
         self.any_panel_1 = SendAny()
         self.any_panel_2 = SendAny()
         self.any_panel_1.any_btn.clicked.connect(self.send_any)
         self.any_panel_2.any_btn.clicked.connect(self.send_any)
+
+
         # create notebook
         self.notebook = Notebook()
         # add tables to the notebook
         self.notebook.add_tab_btn(tab1Name, T1, self.send)
         self.notebook.add_tab_btn(tab2Name, T2, self.send)
         self.notebook.add_tab_btn(tab3Name, T3, self.send)
-        # add controls to side panel
-        vbox.addWidget(self.port)
-        vbox.addWidget(self.controls)
-        vbox.addWidget(self.any_panel_1)
-        vbox.addWidget(self.any_panel_2)
-        vbox.addWidget(self.notebook)
+        self.mapweb_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.port.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.any_panel_1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.any_panel_2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.notebook.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table_notebook.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        splitter = QSplitter(Qt.Vertical)
+        splitter.addWidget(self.notebook)
+        splitter.addWidget(self.table_notebook)
+        splitter.setSizes([300, 700])
+        grid_layout.addWidget(splitter, 2, 0, 5, 3)  # notebook spans 1 row and 1 column
+        grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
+        grid_layout.addWidget(self.port, 0, 0, 1, 2)  # port widget spans 1 row and 3 columns
+        grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        # grid_layout.addWidget(self.any_panel_2, 2, 0, 1, 1)  # any_panel_2 spans 1 row and 1 column
+        # grid_layout.addWidget(self.notebook, 2, 0, 2, 1)  # notebook spans 1 row and 1 column
+        # grid_layout.addWidget(self.table_notebook, 4, 0, 2, 1)  # table_notebook spans 3 rows and 1 column
+        grid_layout.setRowStretch(5, 1)
+        grid_layout.setColumnStretch(5, 2)
+        # vbox.addWidget(self.controls)
+        # vbox.addWidget(self.any_panel_1)
+        # vbox.addWidget(self.any_panel_2)
+        # vbox.addWidget(self.notebook)
 
     def add_marker_to_map(self, lat, lon, popup_text): # Add a marker to the map
         """Dynamically add a marker without zooming or panning the map."""
@@ -230,19 +244,6 @@ class MainWindow(QMainWindow):
             }}
         """
         self.mapweb_view.page().runJavaScript(js_code)
-
-    def test_js_execution2(self):
-        self.add_marker_to_map(34.1355, -83.8188, "New Dynamic Marker10")
-        print("Marker added at:")
-    def test_js_execution(self):
-        self.add_marker_to_map(34.136, -83.819, "New Dynamic Marker")
-        print("Marker added at:")
-        # """Test if JavaScript execution works from Python."""
-        # js_code = """
-        #     console.log('Python-triggered JavaScript is running.');
-        # """
-        # # Execute the JavaScript
-        # self.mapweb_view.page().runJavaScript(js_code)
         
     def enable_developer_tools(self):
         """Enable Developer Tools in QWebEngineView."""
@@ -251,7 +252,6 @@ class MainWindow(QMainWindow):
         self.mapweb_view.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)
 
         pass
-
 
     def open_developer_tools(self):
         """Open Developer Tools in QWebEngineView and keep it open."""
@@ -375,6 +375,10 @@ class MainWindow(QMainWindow):
                     if (window.hasOwnProperty(key) && key.startsWith('map_')) {
                         window.map = window[key];  // Assign the dynamically generated map to window.map
                         console.log('Map object has been exposed to window.map:', key);
+                        // Set the zoomSnap and zoomDelta for finer zoom control
+                        window.map.options.zoomSnap = 0.3;  // Zoom snap at 0.5 increments
+                        window.map.options.zoomDelta = 0.3;  // Zoom step smaller when using scroll or buttons
+                        console.log('Zoom settings adjusted: zoomSnap=0.5, zoomDelta=0.5');
                         return;
                     }
                 }
@@ -446,6 +450,23 @@ class MainWindow(QMainWindow):
                         )
             ascii_str = ascii_str + ascii_symbol
         return ascii_str
+    def start_tcpip_connection(self, host, port):
+        self.connection_type = 'tcpip'
+        self.tcpip_handler = TcpIpHandler(host, port)
+        self.tcpip_handler.data_received.connect(self.on_tcpip_rx)
+        self.tcpip_handler.start()
+
+    def stop_tcpip_connection(self):
+        if self.tcpip_handler:
+            self.tcpip_handler.stop()
+            self.tcpip_handler.wait()
+            self.tcpip_handler = None
+
+    def on_tcpip_rx(self, data):
+        self.rx_buffer.extend(data)
+        while self.has_complete_message():
+            complete_message = self.extract_complete_message()
+            self.process_message(complete_message)
 
     def on_port_rx(self):
         num_rx_bytes = self.port.ser.bytesAvailable()
@@ -475,7 +496,7 @@ class MainWindow(QMainWindow):
             return False  # Minimum length for a message is 4 bytes
 
         if self.rx_buffer[0] != 0x24:
-            print("No start byte found")
+            # print("No start byte found")
             # Remove bytes until we find the start byte 0x24
             while self.rx_buffer and self.rx_buffer[0] != 0x24:
                 # print("Removing byte:", hex(self.rx_buffer[0]))

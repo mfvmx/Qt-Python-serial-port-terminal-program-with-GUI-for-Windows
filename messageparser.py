@@ -63,8 +63,8 @@ def check_for_sequence(self, data):
         parse_devicelocation(self, data, 0)
     elif command_type == devicestatus:
         parse_devicestatus(self, data, 0)
-    else:
-        print(f"Unknown message type: {hex(command_type)}")
+    # else:
+        # print(f"Unknown message type: {hex(command_type)}")
     # self.modelDeviceSatus.layoutChanged.emit()
     # self.modelDeviceSatus.dataChanged.emit(self.modelDeviceSatus.index(0, 0), self.modelDeviceSatus.index(0, 1))
     # print(f'Message Type: {hex(command_type)}, Message Length: {message_length}')
