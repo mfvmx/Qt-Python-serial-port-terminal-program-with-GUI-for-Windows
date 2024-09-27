@@ -47,7 +47,7 @@ class DeviceLocation:
         return f"DeviceLocation(did={self.did}, latitude={self.latitude}, longitude={self.longitude}, speed={self.speed}, zone={self.zone}, last_seen={self.last_seen})"
 
 class OrgSettings:
-    def __init__(self, pVer, orgID, orgV, aYel, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc, TBD):
+    def __init__(self, pVer, orgID, orgV, aYel, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc):
         self.pVer = pVer
         self.orgID = orgID
         self.orgV = orgV
@@ -61,12 +61,11 @@ class OrgSettings:
         self.AccSpl = AccSpl
         self.AccMg = AccMg
         self.VrtSc = VrtSc
-        self.TBD = TBD
 
     def __repr__(self):
         return (f"OrgSettings(pVer={self.pVer}, orgID={self.orgID}, orgV={self.orgV}, "
                 f"aYel={self.aYel}, TrkMs={self.TrkMs}, PitRate={self.PitRate}, PitSpd={self.PitSpd}, L35={self.L35}, H35={self.H35}, "
-                f"AccMs={self.AccMs}, AccSpl={self.AccSpl}, AccMg={self.AccMg}, VrtSc={self.VrtSc}, TBD={self.TBD})")
+                f"AccMs={self.AccMs}, AccSpl={self.AccSpl}, AccMg={self.AccMg}, VrtSc={self.VrtSc})")
 
 class DeviceDebug:
     def __init__(self, channel=None, did1=None, latitude=None, longitude=None, speed=None, zone=None, rssi=None, unicast=None, lap_entry=None, lap_count=None, last_seen=None):
@@ -88,16 +87,11 @@ class DeviceDebug:
                 f"rssi={self.rssi}, unicast={self.unicast}, lap_entry={self.lap_entry}, lap_count={self.lap_count}, last_seen={self.last_seen})")
 
 def check_for_sequence(self, data):
-    # global device_status_table # Use the global device_status_table variable
-    # sequence = b"\x24\x5F"
-    # if sequence in data:
-        # index = data.find(sequence)
-        # print(f"Sequence {sequence} detected at position {index}!")
-
-        # if index + 3 < len(data):
     command_type = data[2]
     message_length = int.from_bytes(data[3:5], byteorder='little')
-    if command_type == orgsettings:
+    if command_type == devicestatus:
+        parse_devicestatus(self, data, 0)
+    elif command_type == orgsettings:
         parse_orgsettings(self, data, 0)
     # else:
     #     print(f"Unknown command type: {hex(command_type)}")
@@ -126,7 +120,7 @@ def parse_devicestatus(self, data, index):
     # lrc = data[index + message_length - 1]
     # endofmessage = data[index + message_length]
     # print(f'Message Type: {hex(command_type)}, Message Length: {message_length}, Size: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
-    self.statusBar().showMessage(f'Message Type: {hex(command_type)}, Message Length: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
+    # self.statusBar().showMessage(f'Message Type: {hex(devicestatus)}, Message Length: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
     # Print the parsed device status lists
     for devicestatus in devicestatuslists:
         # print(devicestatus)
@@ -178,10 +172,10 @@ def parse_orgsettings(self, data, index):
     AccMg = int.from_bytes(data[index + 31:index + 35], byteorder='little')
     VrtSc = data[index + 35]
     TBD = int.from_bytes(data[index + 36:index + 39], byteorder='little')
-    org_settings = OrgSettings(pVer, orgID, orgV, aYel, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc, TBD)
-    print(org_settings)
+    org_settings = OrgSettings(pVer, orgID, orgV, aYel, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc)
+    # print(org_settings)
     # Update the model or UI as needed
-    self.modelOrgSettings._data.append([org_settings.pVer, org_settings.orgID, org_settings.orgV, org_settings.aYel, org_settings.TrkMs, org_settings.PitRate, org_settings.PitSpd, org_settings.L35, org_settings.H35, org_settings.AccMs, org_settings.AccSpl, org_settings.AccMg, org_settings.VrtSc, org_settings.TBD])
+    self.modelOrgSettings._data.append([org_settings.pVer, org_settings.orgID, org_settings.orgV, org_settings.aYel, org_settings.TrkMs, org_settings.PitRate, org_settings.PitSpd, org_settings.L35, org_settings.H35, org_settings.AccMs, org_settings.AccSpl, org_settings.AccMg, org_settings.VrtSc])
     self.modelOrgSettings.layoutChanged.emit()
 
 def parse_debug_data(self, data):
