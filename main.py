@@ -59,7 +59,8 @@ class MainWindow(QMainWindow):
         # main_win.stop_tcpip_connection()
         self.connection_type = 'serial'  # Default to serial
         self.tcpip_handler = None
-        
+        # Add a debug mode flag
+        self.debug_mode = False
         # Add an instance variable to store the Developer Tools window
         self.dev_tools = None
 
@@ -74,6 +75,8 @@ class MainWindow(QMainWindow):
         self.modelPitTimes = CustomTableModelPitTime(device_status_table)
         self.modelDeviceSatus = TableModelStatus(device_status_table)
         self.modelDeviceLocation = TableModelLocation(device_location_table)
+        self.modelOrgSettings = TableModelOrgSettings(org_table)
+        self.modelDebug = TableModelDebug(debug_table)
 
         # create hbox (horizontal layout)
         # sidebox = QVBoxLayout()
@@ -126,28 +129,32 @@ class MainWindow(QMainWindow):
         self.table_notebook.add_tab_tableview("Status", self.modelDeviceSatus, self.send)
         self.table_notebook.add_tab_tableview("Pit Times", self.modelPitTimes, self.send)
         self.table_notebook.add_tab_tableview("Location", self.modelDeviceLocation, self.send)
+        self.table_notebook.add_tab_tableview("Debug", self.modelDebug, self.send)
+        self.table_notebook.add_tab_tableview("Org Settings", self.modelOrgSettings, self.send)
         # self.table_notebook.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
         # sidebox.addWidget(self.table_notebook)
         # create vbox (vertical layout)
         # vbox = QVBoxLayout()
         # add vbox to main window
         # sidebox.addLayout(vbox)
+
         # create Controls and bind handlers
-        # self.controls = Controls()
-        # self.controls.clear_btn.clicked.connect(self.clear_term)
-        # self.controls.copy_btn.clicked.connect(self.copy)
-        # self.controls.cut_btn.clicked.connect(self.cut)
-        # self.controls.info_btn.clicked.connect(self.ports_info)
-        # self.controls.free_btn.clicked.connect(self.get_free_ports)
-        # self.controls.time_box.toggled.connect(self.time_box_toggled)
-        # self.controls.time_box.setChecked(True)
-        # self.controls.echo_box.toggled.connect(self.echo_box_toggled)
+        self.controls = Controls()
+        self.controls.clear_btn.clicked.connect(self.clear_term)
+        self.controls.cut_btn.clicked.connect(self.cut)
+        self.controls.info_btn.clicked.connect(self.ports_info)
+        self.controls.free_btn.clicked.connect(self.get_free_ports)
+        self.controls.time_box.toggled.connect(self.time_box_toggled)
+        self.controls.time_box.setChecked(True)
+        self.controls.echo_box.toggled.connect(self.echo_box_toggled)
+        # Connect the debug button to the debug mode method
+        self.controls.debug_btn.clicked.connect(self.enable_debug_mode)
+
         # create Com port
-        self.port = ComPort(com_port_name, default_baud_rate)
+        self.port = ComPort(com_port_name, default_baud_rate,self)
         self.port.ser.readyRead.connect(self.on_port_rx)
         self.port.ser.errorOccurred.connect(self.port_error)
-        # add controls to side panel
-        # vbox.addWidget(self.port)
+
         # create any_panels and bind handlers
         self.any_panel_1 = SendAny()
         self.any_panel_2 = SendAny()
@@ -174,7 +181,8 @@ class MainWindow(QMainWindow):
         grid_layout.addWidget(splitter, 2, 0, 5, 3)  # notebook spans 1 row and 1 column
         grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
         grid_layout.addWidget(self.port, 0, 0, 1, 2)  # port widget spans 1 row and 3 columns
-        grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        # grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_2, 2, 0, 1, 1)  # any_panel_2 spans 1 row and 1 column
         # grid_layout.addWidget(self.notebook, 2, 0, 2, 1)  # notebook spans 1 row and 1 column
         # grid_layout.addWidget(self.table_notebook, 4, 0, 2, 1)  # table_notebook spans 3 rows and 1 column
@@ -399,6 +407,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.port.close_port()
+        self.port.stop_tcpip_connection()
         event.accept()
 
     @staticmethod
@@ -450,23 +459,27 @@ class MainWindow(QMainWindow):
                         )
             ascii_str = ascii_str + ascii_symbol
         return ascii_str
-    def start_tcpip_connection(self, host, port):
-        self.connection_type = 'tcpip'
-        self.tcpip_handler = TcpIpHandler(host, port)
-        self.tcpip_handler.data_received.connect(self.on_tcpip_rx)
-        self.tcpip_handler.start()
 
-    def stop_tcpip_connection(self):
-        if self.tcpip_handler:
-            self.tcpip_handler.stop()
-            self.tcpip_handler.wait()
-            self.tcpip_handler = None
-
-    def on_tcpip_rx(self, data):
-        self.rx_buffer.extend(data)
-        while self.has_complete_message():
-            complete_message = self.extract_complete_message()
-            self.process_message(complete_message)
+    def on_tcpip_rx(self):
+        try:
+            rx_bytes = self.port.tcpip_handler.socket.recv(1024)  # Read up to 1024 bytes
+            if rx_bytes:
+                rx_bytes = bytes(rx_bytes)
+                # Append the received bytes to the buffer
+                self.rx_buffer.extend(rx_bytes)
+                # Check for the specific binary sequence
+                if self.debug_mode:
+                    while b'\r\n' in self.rx_buffer:
+                        complete_message, self.rx_buffer = self.rx_buffer.split(b'\r\n', 1)
+                        parse_debug_data(self, complete_message)
+                else:
+                    while self.has_complete_message():
+                        # Extract the complete message from the buffer
+                        complete_message = self.extract_complete_message()
+                        # Process the complete message
+                        check_for_sequence(self, complete_message)
+        except socket.error as e:
+            print(f"Socket error: {e}")
 
     def on_port_rx(self):
         num_rx_bytes = self.port.ser.bytesAvailable()
@@ -475,16 +488,20 @@ class MainWindow(QMainWindow):
         # Append the received bytes to the buffer
         self.rx_buffer.extend(rx_bytes)
         # Check for the specific binary sequence
-        # print(f"Received bytes: {[hex(b) for b in rx_bytes]}")
-        # check_for_sequence(self, rx_bytes)
         # Check for complete messages in the buffer
-        while self.has_complete_message():
-            # print("Complete message found")
-            # Extract the complete message from the buffer
-            complete_message = self.extract_complete_message()
-            # print(f"Complete message: {[hex(b) for b in complete_message]}")
-            # Process the complete message
-            check_for_sequence(self, complete_message)
+        if self.debug_mode:
+            # print(f"Received: {self.nice_hex(rx_bytes)}")
+            while B'\r\n' in self.rx_buffer:
+                complete_message, self.rx_buffer = self.rx_buffer.split(b'\r\n', 1)
+                parse_debug_data(self, complete_message)
+        else:
+            while self.has_complete_message():
+                # print("Complete message found")
+                # Extract the complete message from the buffer
+                complete_message = self.extract_complete_message()
+                # print(f"Complete message: {[hex(b) for b in complete_message]}")
+                # Process the complete message
+                check_for_sequence(self, complete_message)
 
     def has_complete_message(self):
         """
@@ -540,6 +557,21 @@ class MainWindow(QMainWindow):
         complete_message = self.rx_buffer[:message_length]
         self.rx_buffer = self.rx_buffer[message_length:]
         return complete_message
+
+    def enable_debug_mode(self):
+        # Toggle the debug mode flag
+        self.debug_mode = not self.debug_mode
+
+        if self.debug_mode:
+            self.statusBar().showMessage("Debug mode enabled")
+            # Send the command to enable debug mode
+            debug_command = b'\x24\x43\x58\x0A\x5B\x23'
+            self.port.write(debug_command)
+        else:
+            self.statusBar().showMessage("Debug mode disabled")
+            # Send the command to disable debug mode
+            debug_command = b'\x24\x42\x4C\x72\x23'
+            self.port.write(debug_command)
 
     def echo_box_toggled(self, checked):
         global echo

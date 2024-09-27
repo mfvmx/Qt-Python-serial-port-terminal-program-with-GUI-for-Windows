@@ -136,13 +136,10 @@ T3_2 = [
 
 T3 = [T3_0, T3_1, T3_2]
 
-device_status_table = []
+device_status_table = [] # holds status data
 
-device_location_table = []
+device_location_table = [] # holds location data
 
-# Sample data array (id, longitude, latitude)
-data_array = [
-    {"id": 1, "longitude": -74.006, "latitude": 40.7128},  # New York
-    {"id": 2, "longitude": 139.6917, "latitude": 35.6895},  # Tokyo
-    {"id": 3, "longitude": 2.3522, "latitude": 48.8566}  # Paris
-]
+org_table = [] # holds organization data
+
+debug_table = [] # holds debug data

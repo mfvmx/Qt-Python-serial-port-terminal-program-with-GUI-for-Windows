@@ -3,15 +3,18 @@
 from PySide6.QtCore import QIODevice, Qt, Slot
 from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 from PySide6.QtWidgets import QPushButton, QComboBox, QGridLayout, QLineEdit, QLabel, QGroupBox
+from tcpiphandler import TcpIpHandler
 
 
 class ComPort(QGroupBox):  # QWidget
-    def __init__(self, name='', baud_rate='115200'):
+    def __init__(self, name='', baud_rate='115200', main_window=None):
         super().__init__()
-        self.setTitle('Serial port ' + name)
+        self.setTitle('Serial port ')
         # add layout
         layout = QGridLayout(self)
         ser_info = QSerialPortInfo()
+        self.main_window = main_window
+
         self.b_portlist = [port.portName() for port in ser_info.availablePorts()]  # list of available COM ports
         # baud rates
         self.b_rates = ['9600', '14400', '19200', '28800', '33600', '38400', '57600', '115200', '230400', '460800',
@@ -57,11 +60,50 @@ class ComPort(QGroupBox):  # QWidget
         # self.close_btn.setStyleSheet('background-color: red;')
         layout.addWidget(self.close_btn, 1, 3)
         self.close_btn.clicked.connect(self.close_port)
+        # Create a button to connect to the TCP/IP server
+        # Create input fields for IP address and port
+        self.ip_address_input = QLineEdit()
+        self.ip_address_input.setPlaceholderText("Enter IP Address")
+        self.port_input = QLineEdit()
+        self.port_input.setPlaceholderText("Enter Port")
+        self.connect_button = QPushButton("Connect TCP/IP")
+        self.disconnect_button = QPushButton("Disconnect TCP/IP")
+        layout.addWidget(self.ip_address_input, 2, 0)
+        layout.addWidget(self.port_input, 2, 2)
+        layout.addWidget(self.connect_button, 2, 3)
+        layout.addWidget(self.disconnect_button, 3, 3)
+        self.connect_button.clicked.connect(self.connect_to_tcp_ip)
+        self.disconnect_button.clicked.connect(self.stop_tcpip_connection)
         # serial port
         self.com_opened = 0
+        self.tcpip_opened = 0
         # self.baud_rate = int(baud_rate)
         self.ser = QSerialPort()
         self.ser.errorOccurred.connect(self.ser_error)
+
+    # Define the connect_to_tcp_ip method
+    def connect_to_tcp_ip(self):
+        if self.tcpip_opened == 0:
+            ip_address = self.ip_address_input.text()
+            port = self.port_input.text()
+            # Add your connection logic here
+            self.start_tcpip_connection(ip_address, port)
+            self.tcpip_opened = 1
+            print(f"Connecting to {ip_address}:{port}")
+
+    def start_tcpip_connection(self, host, port):
+        self.connection_type = 'tcpip'
+        self.tcpip_handler = TcpIpHandler(host, port)
+        self.tcpip_handler.data_received.connect(self.main_window.on_tcpip_rx)
+        self.tcpip_handler.start()
+
+    def stop_tcpip_connection(self):
+        if self.tcpip_opened:
+            if self.tcpip_handler:
+                self.tcpip_opened = 0
+                self.tcpip_handler.stop()
+                self.tcpip_handler.wait()
+                self.tcpip_handler = None
 
     def open_port(self):
         n = 0
@@ -111,3 +153,5 @@ class ComPort(QGroupBox):  # QWidget
     def write(self, data):
         if self.com_opened:
             self.ser.write(data)
+        elif self.tcpip_opened:
+            self.tcpip_handler.socket.send(data)

@@ -7,16 +7,19 @@ class TcpIpHandler(QThread):
     def __init__(self, host, port):
         super().__init__()
         self.host = host
-        self.port = port
+        self.port = int(port)
         self.running = True
+        self.socket = None  # Initialize socket attribute
 
     def run(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((self.host, self.port))
-            while self.running:
-                data = s.recv(1024)
-                if data:
-                    self.data_received.emit(data)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.connect((self.host, self.port))
+        while self.running:
+            data = self.socket.recv(1024)
+            if data:
+                self.data_received.emit(data)
 
     def stop(self):
         self.running = False
+        if self.socket:
+            self.socket.close()

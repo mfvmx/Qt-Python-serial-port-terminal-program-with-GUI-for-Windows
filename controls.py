@@ -22,9 +22,12 @@ class Controls(QGroupBox):
         self.clear_btn.setStyleSheet('background-color: #333333; color: #eeeeee;')
         layout.addWidget(self.clear_btn, 1, 0)
         #
-        self.copy_btn = QPushButton('Copy from term')
-        self.copy_btn.setStyleSheet('background-color: #999999;')
-        layout.addWidget(self.copy_btn, 0, 2)
+        # self.copy_btn = QPushButton('Copy from term')
+        # self.copy_btn.setStyleSheet('background-color: #999999;')
+        # layout.addWidget(self.copy_btn, 0, 2)
+        # Add the new debug button
+        self.debug_btn = QPushButton("Debug Mode")
+        layout.addWidget(self.debug_btn, 0, 2)
         #
         self.cut_btn = QPushButton('Cut from term')
         self.cut_btn.setStyleSheet('background-color: #999999;')
