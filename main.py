@@ -10,9 +10,6 @@ from PySide6.QtCore import QFile, QIODevice, QThread, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 import socket
 import sys
-import folium
-from folium import JsCode
-from folium.plugins import Realtime
 import datetime
 from comport import ComPort
 from controls import *
@@ -23,15 +20,15 @@ from variables import *
 
 ###############################################################
 
-term_title = "QtTerminal"
+term_title = "TD-Lite"
 
 nmax = 300  # max number of COM port, used in get_free_ports()
 
 com_port_name = "COM19"
 default_baud_rate = "115200"
 
-window_min_height = 1000
-window_min_width = 1400
+window_min_height = 900
+window_min_width = 900
 
 term_min_width = 400
 
@@ -72,11 +69,11 @@ class MainWindow(QMainWindow):
         # create vertical layout
         # infovbox = QHBoxLayout(central_widget)
         grid_layout = QGridLayout(central_widget)
-        self.modelPitTimes = CustomTableModelPitTime(device_status_table)
+        # self.modelPitTimes = CustomTableModelPitTime(device_status_table)
         self.modelDeviceSatus = TableModelStatus(device_status_table)
-        self.modelDeviceLocation = TableModelLocation(device_location_table)
+        # self.modelDeviceLocation = TableModelLocation(device_location_table)
         self.modelOrgSettings = TableModelOrgSettings(org_table)
-        self.modelDebug = TableModelDebug(debug_table)
+        # self.modelDebug = TableModelDebug(debug_table)
 
         # create hbox (horizontal layout)
         # sidebox = QVBoxLayout()
@@ -94,49 +91,12 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
                 """
         )
-        # sidebox.addWidget(self.term)
-        # infovbox.addWidget(self.term) # Bottom of the window
-        self.map = folium.Map(location=[34.14400, -83.816108], zoom_start=16)
-
-            # Add Esri World Imagery (satellite view)
-        folium.TileLayer(
-            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            attr="Esri",
-            name="Esri Satellite",
-            overlay=False,
-            control=True
-        ).add_to(self.map)
-        # Add LayerControl to switch between different views
-        folium.LayerControl().add_to(self.map)
-        self.mapweb_view = QWebEngineView()
-        self.enable_developer_tools()
-
-        # Binding Developer Tools to a keypress, for example, F12
-        self.shortcut = QShortcut(QKeySequence("F12"), self)
-        self.shortcut.activated.connect(self.open_developer_tools)
-
-        self.update_map()
-        self.expose_map_js()
-
-        # Set the size policy of self.mapweb_view to expanding
-        # self.mapweb_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # Add self.mapweb_view to the layout with a higher stretch factor
-        # infovbox.addWidget(self.mapweb_view, stretch=2)
 
         self.table_notebook = Notebook()
         # add tables to the notebook
-        self.table_notebook.add_tab_tableview("Status", self.modelDeviceSatus, self.send)
-        self.table_notebook.add_tab_tableview("Pit Times", self.modelPitTimes, self.send)
-        self.table_notebook.add_tab_tableview("Location", self.modelDeviceLocation, self.send)
-        self.table_notebook.add_tab_tableview("Debug", self.modelDebug, self.send)
         self.table_notebook.add_tab_tableview("Org Settings", self.modelOrgSettings, self.send)
-        # self.table_notebook.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
-        # sidebox.addWidget(self.table_notebook)
-        # create vbox (vertical layout)
-        # vbox = QVBoxLayout()
-        # add vbox to main window
-        # sidebox.addLayout(vbox)
+        self.table_notebook.add_tab_tableview("Status", self.modelDeviceSatus, self.send)
+
 
         # create Controls and bind handlers
         self.controls = Controls()
@@ -166,107 +126,26 @@ class MainWindow(QMainWindow):
         self.notebook = Notebook()
         # add tables to the notebook
         self.notebook.add_tab_btn(tab1Name, T1, self.send)
-        self.notebook.add_tab_btn(tab2Name, T2, self.send)
-        self.notebook.add_tab_btn(tab3Name, T3, self.send)
-        self.mapweb_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # self.notebook.add_tab_btn(tab2Name, T2, self.send)
+        # self.notebook.add_tab_btn(tab3Name, T3, self.send)
         self.port.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.any_panel_1.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.any_panel_2.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.notebook.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.table_notebook.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        splitter = QSplitter(Qt.Vertical)
-        splitter.addWidget(self.notebook)
-        splitter.addWidget(self.table_notebook)
-        splitter.setSizes([300, 700])
-        grid_layout.addWidget(splitter, 2, 0, 5, 3)  # notebook spans 1 row and 1 column
-        grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
+        # splitter = QSplitter(Qt.Vertical)
+        # splitter.addWidget(self.notebook)
+        # splitter.addWidget(self.table_notebook)
+        # splitter.setSizes([500, 700])
+        # grid_layout.addWidget(splitter, 2, 0, 5, 5)  # notebook spans 1 row and 1 column
+        grid_layout.addWidget(self.notebook, 2, 0, 2, 2)  # notebook spans 1 row and 1 column
+        grid_layout.addWidget(self.table_notebook, 4, 0, 6, 6)  # notebook spans 1 row and 1 column
+        # grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
         grid_layout.addWidget(self.port, 0, 0, 1, 2)  # port widget spans 1 row and 3 columns
-        grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
-        # grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
-        # grid_layout.addWidget(self.any_panel_2, 2, 0, 1, 1)  # any_panel_2 spans 1 row and 1 column
-        # grid_layout.addWidget(self.notebook, 2, 0, 2, 1)  # notebook spans 1 row and 1 column
-        # grid_layout.addWidget(self.table_notebook, 4, 0, 2, 1)  # table_notebook spans 3 rows and 1 column
+        # grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+
         grid_layout.setRowStretch(5, 1)
-        grid_layout.setColumnStretch(5, 2)
-        # vbox.addWidget(self.controls)
-        # vbox.addWidget(self.any_panel_1)
-        # vbox.addWidget(self.any_panel_2)
-        # vbox.addWidget(self.notebook)
-
-    def add_marker_to_map(self, lat, lon, popup_text): # Add a marker to the map
-        """Dynamically add a marker without zooming or panning the map."""
-        js_code = f"""
-            if (typeof window.map !== 'undefined') {{
-                var marker = L.marker([{lat}, {lon}]).addTo(window.map);
-                marker.bindPopup('{popup_text}');
-                console.log('Marker added at: {lat}, {lon}');
-            }} else {{
-                console.error('window.map is not available.');
-            }}
-        """
-        self.mapweb_view.page().runJavaScript(js_code)
-
-    def add_or_update_marker(self, marker_id, lat, lon, popup_text, color):
-        """Dynamically add or update a marker with a custom color."""
-        js_code = f"""
-            // Initialize the markers object if it doesn't exist
-            if (typeof window.markers === 'undefined') {{
-                window.markers = {{}};
-            }}
-
-            // Extract the last 4 characters of the marker_id
-            var short_id = '{marker_id}'.slice(-4);
-
-            // Create a custom divIcon with a dynamic background color
-            var customIcon = L.divIcon({{
-                html: '<div style="background-color:{color};padding:2px;border-radius:5px;border:2px solid black;">' + short_id + '</div>',
-                className: 'custom-marker',  // Optional class for more styling
-                iconSize: [30, 20],          // Adjust the size of the marker
-                iconAnchor: [15, 10]         // Center the marker on the coordinates
-            }});
-
-            // Check if a marker with this ID already exists
-            if (window.markers['{marker_id}']) {{
-                // Update the existing marker's position and popup
-                window.markers['{marker_id}'].setLatLng([{lat}, {lon}]).bindPopup('{popup_text}');
-                window.markers['{marker_id}'].setIcon(customIcon);  // Update the icon
-                console.log('Updated marker {marker_id} to new position: {lat}, {lon}');
-            }} else {{
-                // Add a new marker with the custom colored icon
-                var marker = L.marker([{lat}, {lon}], {{ icon: customIcon }}).addTo(window.map).bindPopup('{popup_text}');
-                window.markers['{marker_id}'] = marker;  // Store the marker by ID
-                console.log('Added new marker {marker_id} at: {lat}, {lon}');
-            }}
-        """
-        # Execute the JavaScript to dynamically add or update the marker
-        self.mapweb_view.page().runJavaScript(js_code)
-
-    def remove_marker(self, marker_id): # Remove a marker by ID
-        js_code = f"""
-            if (window.markers && window.markers['{marker_id}']) {{
-                window.map.removeLayer(window.markers['{marker_id}']);
-                delete window.markers['{marker_id}'];
-                console.log('Removed marker {marker_id}');
-            }} else {{
-                console.log('No marker found with ID {marker_id}');
-            }}
-        """
-        self.mapweb_view.page().runJavaScript(js_code)
-        
-    def enable_developer_tools(self):
-        """Enable Developer Tools in QWebEngineView."""
-        # These settings can remain if you want to enable other attributes like JavaScript
-        self.mapweb_view.settings().setAttribute(QWebEngineSettings.LocalStorageEnabled, True)
-        self.mapweb_view.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)
-
-        pass
-
-    def open_developer_tools(self):
-        """Open Developer Tools in QWebEngineView and keep it open."""
-        if self.dev_tools is None:
-            self.dev_tools = QWebEngineView()  # Create a new QWebEngineView for the DevTools
-            self.mapweb_view.page().setDevToolsPage(self.dev_tools.page())  # Set the dev tools page
-        self.dev_tools.show()  # Show the dev tools window
+        # grid_layout.setColumnStretch(5, 2)
 
     def send(self, btn):
         # global cmd_end
@@ -461,6 +340,9 @@ class MainWindow(QMainWindow):
         return ascii_str
 
     def on_tcpip_rx(self):
+        if not self.port.tcpip_handler or not self.port.tcpip_handler.socket:
+            print("TCP/IP handler or socket is no longer valid.")
+            return  # Exit if there's no valid connection
         try:
             rx_bytes = self.port.tcpip_handler.socket.recv(1024)  # Read up to 1024 bytes
             if rx_bytes:

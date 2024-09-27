@@ -47,19 +47,11 @@ class DeviceLocation:
         return f"DeviceLocation(did={self.did}, latitude={self.latitude}, longitude={self.longitude}, speed={self.speed}, zone={self.zone}, last_seen={self.last_seen})"
 
 class OrgSettings:
-    def __init__(self, pVer, orgID, orgV, trkID, trkV, aYel, Ch1, Ch2, Ch3, Ch4, w2ch, w5ch, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc, TBD):
+    def __init__(self, pVer, orgID, orgV, aYel, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc, TBD):
         self.pVer = pVer
         self.orgID = orgID
         self.orgV = orgV
-        self.trkID = trkID
-        self.trkV = trkV
         self.aYel = aYel
-        self.Ch1 = Ch1
-        self.Ch2 = Ch2
-        self.Ch3 = Ch3
-        self.Ch4 = Ch4
-        self.w2ch = w2ch
-        self.w5ch = w5ch
         self.TrkMs = TrkMs
         self.PitRate = PitRate
         self.PitSpd = PitSpd
@@ -72,9 +64,8 @@ class OrgSettings:
         self.TBD = TBD
 
     def __repr__(self):
-        return (f"OrgSettings(pVer={self.pVer}, orgID={self.orgID}, orgV={self.orgV}, trkID={self.trkID}, trkV={self.trkV}, "
-                f"aYel={self.aYel}, Ch1={self.Ch1}, Ch2={self.Ch2}, Ch3={self.Ch3}, Ch4={self.Ch4}, w2ch={self.w2ch}, "
-                f"w5ch={self.w5ch}, TrkMs={self.TrkMs}, PitRate={self.PitRate}, PitSpd={self.PitSpd}, L35={self.L35}, H35={self.H35}, "
+        return (f"OrgSettings(pVer={self.pVer}, orgID={self.orgID}, orgV={self.orgV}, "
+                f"aYel={self.aYel}, TrkMs={self.TrkMs}, PitRate={self.PitRate}, PitSpd={self.PitSpd}, L35={self.L35}, H35={self.H35}, "
                 f"AccMs={self.AccMs}, AccSpl={self.AccSpl}, AccMg={self.AccMg}, VrtSc={self.VrtSc}, TBD={self.TBD})")
 
 class DeviceDebug:
@@ -106,44 +97,14 @@ def check_for_sequence(self, data):
         # if index + 3 < len(data):
     command_type = data[2]
     message_length = int.from_bytes(data[3:5], byteorder='little')
-    # device_status_table[0][0] = command_type
-    # device_status_table[0][1] = message_length
-    if command_type == pittime:
-        parse_pittime(self, data, 0)
-    elif command_type == devicelocation:
-        parse_devicelocation(self, data, 0)
-    elif command_type == devicestatus:
-        parse_devicestatus(self, data, 0)
-    elif command_type == orgsettings:
+    if command_type == orgsettings:
         parse_orgsettings(self, data, 0)
-    else:
-        print(f"Unknown command type: {hex(command_type)}")
+    # else:
+    #     print(f"Unknown command type: {hex(command_type)}")
     # self.modelDeviceSatus.layoutChanged.emit()
     # self.modelDeviceSatus.dataChanged.emit(self.modelDeviceSatus.index(0, 0), self.modelDeviceSatus.index(0, 1))
     # print(f'Message Type: {hex(command_type)}, Message Length: {message_length}')
     self.statusBar().showMessage(f'Message Type: {hex(command_type)}, Message Length: {message_length}')
-
-def parse_pittime(self, data, index):
-    message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
-    devicepittimelists = []
-    for i in range(message_length // 12):
-        start = index + 5 + i * 12
-        did = int.from_bytes(data[start:start + 4], byteorder='little')
-        entrytime = int.from_bytes(data[start + 4:start + 8], byteorder='little')
-        exittime = int.from_bytes(data[start + 8:start + 12], byteorder='little')
-        devicepittimelists.append(DevicePitTime(did, entrytime, exittime))
-    for devicepittime in devicepittimelists:
-        did_exists = False
-        for row in self.modelPitTimes._data:
-            if row[0] == devicepittime.did:
-                row[1] = devicepittime.entrytime
-                row[2] = devicepittime.exittime
-                did_exists = True
-                break
-        if not did_exists:
-            self.modelPitTimes._data.append([devicepittime.did, devicepittime.entrytime, devicepittime.exittime])
-        self.modelPitTimes.layoutChanged.emit()
-        # print(self.modelPitTimes._data)
 
 def parse_devicestatus(self, data, index):
     message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
@@ -165,7 +126,7 @@ def parse_devicestatus(self, data, index):
     # lrc = data[index + message_length - 1]
     # endofmessage = data[index + message_length]
     # print(f'Message Type: {hex(command_type)}, Message Length: {message_length}, Size: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
-    # self.statusBar().showMessage(f'Message Type: {hex(command_type)}, Message Length: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
+    self.statusBar().showMessage(f'Message Type: {hex(command_type)}, Message Length: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
     # Print the parsed device status lists
     for devicestatus in devicestatuslists:
         # print(devicestatus)
@@ -193,38 +154,6 @@ def parse_devicestatus(self, data, index):
         # self.modelDeviceSatus.dataChanged.emit(self.modelDeviceSatus.index(0, 0), self.modelDeviceSatus.index(0, 1))
         # print(self.modelDeviceSatus._data)
 
-def parse_devicelocation(self, data, index):
-    message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
-    devicelocationlists = []
-    # print(f'parse_devicelocation: {" ".join(f"{byte:02X}" for byte in data)}')
-    for i in range((message_length - 14) // 16):
-        start = index + 13 + i * 16
-        did = int.from_bytes(data[start:start + 4], byteorder='little')
-        # print(' '.join(f'{byte:02X}' for byte in data[start:start + 4]))
-        latitude = struct.unpack('<f', data[start + 4:start + 8])[0]
-        # print(' '.join(f'{byte:02X}' for byte in data[start + 4:start + 8]))
-        longitude = struct.unpack('<f', data[start + 8:start + 12])[0]
-        speed = data[start + 12]
-        zone = data[start + 13]
-        last_seen = int.from_bytes(data[start + 14:start + 16], byteorder='little')
-        devicelocationlists.append(DeviceLocation(did, latitude, longitude, speed, zone, last_seen))
-    for devicelocation in devicelocationlists:
-        did_exists = False
-        for row in self.modelDeviceLocation._data:
-            if row[0] == devicelocation.did:
-                row[1] = devicelocation.latitude
-                row[2] = devicelocation.longitude
-                row[3] = devicelocation.speed
-                row[4] = devicelocation.zone
-                row[5] = devicelocation.last_seen
-                self.add_or_update_marker(devicelocation.did, devicelocation.latitude, devicelocation.longitude, devicelocation.did, "#ffffff")
-                did_exists = True
-                break
-        if not did_exists:
-            self.modelDeviceLocation._data.append([devicelocation.did, devicelocation.latitude, devicelocation.longitude, devicelocation.speed, devicelocation.zone, devicelocation.last_seen])
-        self.modelDeviceLocation.layoutChanged.emit()
-        # print(self.modelDeviceLocation._data)
-
 def parse_orgsettings(self, data, index):
     message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
     pVer = data[index + 5]
@@ -249,10 +178,10 @@ def parse_orgsettings(self, data, index):
     AccMg = int.from_bytes(data[index + 31:index + 35], byteorder='little')
     VrtSc = data[index + 35]
     TBD = int.from_bytes(data[index + 36:index + 39], byteorder='little')
-    org_settings = OrgSettings(pVer, orgID, orgV, trkID, trkV, aYel, Ch1, Ch2, Ch3, Ch4, w2ch, w5ch, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc, TBD)
+    org_settings = OrgSettings(pVer, orgID, orgV, aYel, TrkMs, PitRate, PitSpd, L35, H35, AccMs, AccSpl, AccMg, VrtSc, TBD)
     print(org_settings)
     # Update the model or UI as needed
-    self.modelOrgSettings._data.append([org_settings.pVer, org_settings.orgID, org_settings.orgV, org_settings.trkID, org_settings.trkV, org_settings.aYel, org_settings.Ch1, org_settings.Ch2, org_settings.Ch3, org_settings.Ch4, org_settings.w2ch, org_settings.w5ch, org_settings.TrkMs, org_settings.PitRate, org_settings.PitSpd, org_settings.L35, org_settings.H35, org_settings.AccMs, org_settings.AccSpl, org_settings.AccMg, org_settings.VrtSc, org_settings.TBD])
+    self.modelOrgSettings._data.append([org_settings.pVer, org_settings.orgID, org_settings.orgV, org_settings.aYel, org_settings.TrkMs, org_settings.PitRate, org_settings.PitSpd, org_settings.L35, org_settings.H35, org_settings.AccMs, org_settings.AccSpl, org_settings.AccMg, org_settings.VrtSc, org_settings.TBD])
     self.modelOrgSettings.layoutChanged.emit()
 
 def parse_debug_data(self, data):

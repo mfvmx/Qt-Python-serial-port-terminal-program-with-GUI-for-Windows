@@ -164,8 +164,8 @@ class TableModelOrgSettings(QAbstractTableModel):
         QAbstractTableModel.__init__(self)
         self._data = data
         self._headers = [
-            "pVer", "orgID", "orgV", "trkID", "trkV", "aYel", "Ch1", "Ch2", "Ch3", "Ch4",
-            "w2ch", "w5ch", "TrkMs", "PitRate", "PitSpd", "L35", "H35", "AccMs", "AccSpl",
+            "pVer", "orgID", "orgV", "trkID", "trkV", "aYel",
+            "TrkMs", "PitRate", "PitSpd", "L35", "H35", "AccMs", "AccSpl",
             "AccMg", "VrtSc", "TBD"
         ]  # Define the column headers
         self._sort_order = Qt.AscendingOrder

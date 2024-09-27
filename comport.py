@@ -5,7 +5,6 @@ from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 from PySide6.QtWidgets import QPushButton, QComboBox, QGridLayout, QLineEdit, QLabel, QGroupBox
 from tcpiphandler import TcpIpHandler
 
-
 class ComPort(QGroupBox):  # QWidget
     def __init__(self, name='', baud_rate='115200', main_window=None):
         super().__init__()
@@ -63,9 +62,10 @@ class ComPort(QGroupBox):  # QWidget
         # Create a button to connect to the TCP/IP server
         # Create input fields for IP address and port
         self.ip_address_input = QLineEdit()
-        self.ip_address_input.setPlaceholderText("Enter IP Address")
+        # self.ip_address_input.setPlaceholderText("Enter IP Address")
+        self.ip_address_input.setText("10.10.0.254")
         self.port_input = QLineEdit()
-        self.port_input.setPlaceholderText("Enter Port")
+        self.port_input.setText("54322")
         self.connect_button = QPushButton("Connect TCP/IP")
         self.disconnect_button = QPushButton("Disconnect TCP/IP")
         layout.addWidget(self.ip_address_input, 2, 0)
@@ -92,18 +92,26 @@ class ComPort(QGroupBox):  # QWidget
             print(f"Connecting to {ip_address}:{port}")
 
     def start_tcpip_connection(self, host, port):
-        self.connection_type = 'tcpip'
-        self.tcpip_handler = TcpIpHandler(host, port)
-        self.tcpip_handler.data_received.connect(self.main_window.on_tcpip_rx)
-        self.tcpip_handler.start()
+        try:
+            self.connection_type = 'tcpip'
+            self.tcpip_handler = TcpIpHandler(host, port)
+            self.tcpip_handler.data_received.connect(self.main_window.on_tcpip_rx)
+            self.tcpip_handler.start()
+            self.info_label.setText(f'Connected to {host}:{port}')
+            self.info_label.setStyleSheet('color: #00dd00;')  # green
+        except Exception as e:
+            self.info_label.setText(f'Connection failed: {str(e)}')
+            self.info_label.setStyleSheet('color: red;')
 
     def stop_tcpip_connection(self):
         if self.tcpip_opened:
             if self.tcpip_handler:
+                self.tcpip_handler.data_received.disconnect(self.main_window.on_tcpip_rx)  # Disconnect the signal
                 self.tcpip_opened = 0
                 self.tcpip_handler.stop()
                 self.tcpip_handler.wait()
                 self.tcpip_handler = None
+                self.main_window.statusBar().showMessage("TCP/IP connection closed.")
 
     def open_port(self):
         n = 0
