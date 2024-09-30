@@ -18,7 +18,7 @@ from comport import ComPort
 from controls import *
 from messageparser import *
 from tablemodel import *
-from tcpiphandler import TcpIpHandler
+from tcpip import TCPClient
 from variables import *
 
 ###############################################################
@@ -58,7 +58,8 @@ class MainWindow(QMainWindow):
         # main_win.start_tcpip_connection('127.0.0.1', 12345)
         # main_win.stop_tcpip_connection()
         self.connection_type = 'serial'  # Default to serial
-        self.tcpip_handler = None
+        self.tcp_client = TCPClient()
+        self.tcp_client.sock.readyRead.connect(self.on_port_rx)
         # Add a debug mode flag
         self.debug_mode = False
         # Add an instance variable to store the Developer Tools window
@@ -182,6 +183,7 @@ class MainWindow(QMainWindow):
         grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
         grid_layout.addWidget(self.port, 0, 0, 1, 2)  # port widget spans 1 row and 3 columns
         grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        grid_layout.addWidget(self.tcp_client, 3, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_2, 2, 0, 1, 1)  # any_panel_2 spans 1 row and 1 column
         # grid_layout.addWidget(self.notebook, 2, 0, 2, 1)  # notebook spans 1 row and 1 column
@@ -273,16 +275,13 @@ class MainWindow(QMainWindow):
         global sms_end
         cmd_to_send = btn.get_cmd()
         if cmd_to_send:
-            if cmd_to_send == sms:  # if need to send SMS
-                self.write(cmd_to_send.encode("ascii") + sms_end)
+            if isinstance(cmd_to_send, bytes):  # if type of cmd_to_send is bytes
+                # self.write(cmd_to_send.encode("ascii") + cmd_end)
+                self.write(cmd_to_send)
             else:
-                if isinstance(cmd_to_send, bytes):  # if type of cmd_to_send is bytes
-                    # self.write(cmd_to_send.encode("ascii") + cmd_end)
-                    self.write(cmd_to_send)
-                else:
-                    print(
-                        "send(): something went wrong sending to UART (ASCII encoding failed)!"
-                    )
+                print(
+                    "send(): something went wrong sending!"
+                )
 
     def send_any(self):
         global cmd_end
@@ -324,12 +323,10 @@ class MainWindow(QMainWindow):
         self.term.ensureCursorVisible()
 
     def write(self, data):
-        global echo
-        if echo:
-            str_data = self.decode_and_prepare(b"    <<<    " + data)
-            self.term.insertPlainText(str_data)
-            self.term.ensureCursorVisible()
-        self.port.write(data)
+        if self.port.com_opened:
+            self.port.write(data)
+        elif self.tcp_client.started:
+            self.tcp_client.handle_message(data)
 
     def clear_term(self):
         try:
@@ -407,7 +404,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.port.close_port()
-        self.port.stop_tcpip_connection()
+        self.tcp_client.stop()
         event.accept()
 
     @staticmethod
@@ -482,8 +479,12 @@ class MainWindow(QMainWindow):
             print(f"Socket error: {e}")
 
     def on_port_rx(self):
-        num_rx_bytes = self.port.ser.bytesAvailable()
-        rx_bytes = self.port.ser.read(num_rx_bytes)
+        if self.port.com_opened:
+            num_rx_bytes = self.port.ser.bytesAvailable()
+            rx_bytes = self.port.ser.read(num_rx_bytes)
+        elif self.tcp_client.started:
+            num_rx_bytes = self.tcp_client.sock.bytesAvailable()
+            rx_bytes = self.tcp_client.sock.read(num_rx_bytes)
         rx_bytes = bytes(rx_bytes)
         # Append the received bytes to the buffer
         self.rx_buffer.extend(rx_bytes)
