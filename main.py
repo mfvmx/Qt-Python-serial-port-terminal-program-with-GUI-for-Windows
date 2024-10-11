@@ -3,11 +3,11 @@
 
 from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QApplication, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSizePolicy, QGridLayout, QSplitter
+from PySide6.QtWidgets import QApplication, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSizePolicy, QGridLayout, QSplitter, QMenu
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
 from PySide6.QtCore import QFile, QIODevice, QThread, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut, QAction
 import socket
 import sys
 import folium
@@ -74,7 +74,8 @@ class MainWindow(QMainWindow):
         # infovbox = QHBoxLayout(central_widget)
         grid_layout = QGridLayout(central_widget)
         self.modelPitTimes = CustomTableModelPitTime(device_status_table)
-        self.modelDeviceSatus = TableModelStatus(device_status_table)
+        self.modelTrackStatus = TableModelTrackStatus(track_status_table)
+        self.modelDeviceStatus = TableModelStatus(device_status_table)
         self.modelDeviceLocation = TableModelLocation(device_location_table)
         self.modelOrgSettings = TableModelOrgSettings(org_table)
         self.modelDebug = TableModelDebug(debug_table)
@@ -126,10 +127,19 @@ class MainWindow(QMainWindow):
         # infovbox.addWidget(self.mapweb_view, stretch=2)
 
         self.table_notebook = Notebook()
+        # for i in range(self.table_notebook.count()):
+        #     table_view = self.table_notebook.widget(i)
+        #     if isinstance(table_view, QTableView):
+        #         table_view.setContextMenuPolicy(Qt.CustomContextMenu)
+        #         table_view.customContextMenuRequested.connect(self.open_context_menu)
         # add tables to the notebook
-        self.table_notebook.add_tab_tableview("Status", self.modelDeviceSatus, self.send)
+        # Enable context menu for the table view
+        self.table_notebook.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table_notebook.customContextMenuRequested.connect(self.open_context_menu)
+        self.table_notebook.add_tab_tableview("Status", self.modelDeviceStatus, self.send)
         self.table_notebook.add_tab_tableview("Pit Times", self.modelPitTimes, self.send)
         self.table_notebook.add_tab_tableview("Location", self.modelDeviceLocation, self.send)
+        self.table_notebook.add_tab_tableview("Track Status", self.modelTrackStatus, self.send)
         self.table_notebook.add_tab_tableview("Debug", self.modelDebug, self.send)
         self.table_notebook.add_tab_tableview("Org Settings", self.modelOrgSettings, self.send)
         # self.table_notebook.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
@@ -182,8 +192,8 @@ class MainWindow(QMainWindow):
         grid_layout.addWidget(splitter, 2, 0, 5, 3)  # notebook spans 1 row and 1 column
         grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
         grid_layout.addWidget(self.port, 0, 0, 1, 2)  # port widget spans 1 row and 3 columns
-        grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
-        grid_layout.addWidget(self.tcp_client, 3, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        # grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        grid_layout.addWidget(self.tcp_client, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_2, 2, 0, 1, 1)  # any_panel_2 spans 1 row and 1 column
         # grid_layout.addWidget(self.notebook, 2, 0, 2, 1)  # notebook spans 1 row and 1 column
@@ -194,6 +204,42 @@ class MainWindow(QMainWindow):
         # vbox.addWidget(self.any_panel_1)
         # vbox.addWidget(self.any_panel_2)
         # vbox.addWidget(self.notebook)
+
+    def open_context_menu(self, position):
+        current_index = self.table_notebook.currentIndex()
+        tab = self.table_notebook.widget(current_index)
+        layout = tab.layout()
+
+        # Find the QTableView in the tab's layout
+        for i in range(layout.count()):
+            widget = layout.itemAt(i).widget()
+            if isinstance(widget, QTableView):
+                # Map the global position to the widget's local position
+                local_position = widget.mapFromGlobal(self.table_notebook.mapToGlobal(position))
+                index = widget.indexAt(local_position)
+                if not index.isValid():
+                    continue
+                z2did = index.model().data(index, Qt.DisplayRole)  # Include DisplayRole
+                print(f"Context menu DID: {z2did}, Index: {index.row()}, Column: {index.column()}")
+                menu = QMenu()
+                zoom_action = QAction("Zoom to Marker", self)
+                zoom_action.triggered.connect(lambda _, z2did=z2did: self.zoom_to_marker(z2did))
+                
+                menu.addAction(zoom_action)
+                menu.exec(widget.viewport().mapToGlobal(local_position))
+                break
+
+    def zoom_to_marker(self, markerdid):
+        print(f"Zooming to marker for DID: {markerdid}, Type: {type(markerdid)}")
+        print(f"modelDeviceLocation contents: {self.modelDeviceLocation}")
+        # Assuming TableModelLocation has a method to get location data by DID
+        location_data = self.modelDeviceLocation.get_location_data(markerdid)
+        if location_data:
+            print("DID found")
+            lat, lon = location_data
+            self.mapweb_view.page().runJavaScript(f"window.map.setView([{lat}, {lon}], 16);")
+        else:
+            print(f"DID not found in modelDeviceLocation")
 
     def add_marker_to_map(self, lat, lon, popup_text): # Add a marker to the map
         """Dynamically add a marker without zooming or panning the map."""

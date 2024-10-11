@@ -11,6 +11,19 @@ device_version = 0x56
 orgsettings = 0x57
 driver_id = 0x5C
 
+# trackstatuslist
+class TrackStatusList:
+    def __init__(self, commandcount, flag, ch1, ch2, ch3, ch4):
+        self.commandcount = commandcount
+        self.flag = flag
+        self.ch1 = ch1
+        self.ch2 = ch2
+        self.ch3 = ch3
+        self.ch4 = ch4
+
+    def __repr__(self):
+        return f"TrackStatusList(did={self.commandcount}, flag={self.flag}, batv={self.ch1}, extv={self.ch2}, rssi={self.ch3}, temp={self.ch4})"
+
 # devicestatuslist
 class DeviceStatusList:
     def __init__(self, did, flag, batv, extv, rssi, temp, lasttime):
@@ -106,10 +119,12 @@ def check_for_sequence(self, data):
         parse_devicestatus(self, data, 0)
     elif command_type == orgsettings:
         parse_orgsettings(self, data, 0)
+    elif command_type == trackstatus:
+        parse_trackstatus(self, data, 0)    
     else:
         print(f"Unknown command type: {hex(command_type)}")
-    # self.modelDeviceSatus.layoutChanged.emit()
-    # self.modelDeviceSatus.dataChanged.emit(self.modelDeviceSatus.index(0, 0), self.modelDeviceSatus.index(0, 1))
+    # self.modelDeviceStatus.layoutChanged.emit()
+    # self.modelDeviceStatus.dataChanged.emit(self.modelDeviceStatus.index(0, 0), self.modelDeviceStatus.index(0, 1))
     # print(f'Message Type: {hex(command_type)}, Message Length: {message_length}')
     self.statusBar().showMessage(f'Message Type: {hex(command_type)}, Message Length: {message_length}')
 
@@ -133,8 +148,48 @@ def parse_pittime(self, data, index):
         if not did_exists:
             self.modelPitTimes._data.append([devicepittime.did, devicepittime.entrytime, devicepittime.exittime])
         self.modelPitTimes.layoutChanged.emit()
-        # print(self.modelPitTimes._data)
 
+def parse_trackstatus(self, data, index):
+    message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
+    # print(f'parse_trackstatus: {" ".join(f"{byte:02X}" for byte in data)}')
+    # print(f'Message Type: {hex(trackstatus)}, Message Length: {message_length}')
+    trackstatuslists = []
+    start = index + 5
+    # print(f'Start: {start}, values: {hex(data[start])}')
+    commandcount = int.from_bytes(data[start:start + 4], byteorder='little')
+    # print(' '.join(f'{byte:02X}' for byte in data[start:start + 4]))
+    flag = data[start + 4]
+    ch1 = data[start + 5]
+    ch2 = data[start + 6]
+    ch3 = data[start + 7]
+    ch4 = data[start + 8]
+    trackstatuslists.append(TrackStatusList(commandcount, flag, ch1, ch2, ch3, ch4))
+    # lrc = data[index + message_length - 1]
+    # endofmessage = data[index + message_length]
+    # print(f'Message Type: {hex(trackstatus)}, Message Length: {message_length}, Size: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
+    # self.statusBar().showMessage(f'Message Type: {hex(trackstatus)}, Message Length: {message_length}, LRC: {hex(lrc)}, End of Message: {hex(endofmessage)}')
+    # Print the parsed device status lists
+    for trackstatus in trackstatuslists:
+        # Check if Count already exists in device_status_table
+        did_exists = False
+        for row in self.modelTrackStatus._data:
+            if row[0] == trackstatus.commandcount:
+                # Overwrite the existing row
+                row[1] = trackstatus.flag
+                row[2] = trackstatus.ch1
+                row[3] = trackstatus.ch2
+                row[4] = trackstatus.ch3
+                row[5] = trackstatus.ch4
+                did_exists = True
+                break
+        if not did_exists:
+            # Append a new row if DID does not exist
+            self.modelTrackStatus._data.append([trackstatus.commandcount, trackstatus.flag, trackstatus.ch1, trackstatus.ch2, trackstatus.ch3, trackstatus.ch4])
+        # Emit dataChanged signal for the entire table
+        self.modelTrackStatus.layoutChanged.emit()
+        # self.modelTrackStatus.dataChanged.emit(self.modelTrackStatus.index(0, 0), self.modelTrackStatus.index(0, 1))
+        # print(self.modelTrackStatus._data)
+        
 def parse_devicestatus(self, data, index):
     message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
     # print(f'parse_devicestatus: {" ".join(f"{byte:02X}" for byte in data)}')
@@ -161,7 +216,7 @@ def parse_devicestatus(self, data, index):
         # print(devicestatus)
         # Check if DID already exists in device_status_table
         did_exists = False
-        for row in self.modelDeviceSatus._data:
+        for row in self.modelDeviceStatus._data:
             if row[0] == devicestatus.did:
                 # Overwrite the existing row
                 row[1] = devicestatus.flag
@@ -177,11 +232,11 @@ def parse_devicestatus(self, data, index):
                 break
         if not did_exists:
             # Append a new row if DID does not exist
-            self.modelDeviceSatus._data.append([devicestatus.did, devicestatus.flag, devicestatus.batv, devicestatus.extv, devicestatus.rssi, devicestatus.temp, devicestatus.lasttime])
+            self.modelDeviceStatus._data.append([devicestatus.did, devicestatus.flag, devicestatus.batv, devicestatus.extv, devicestatus.rssi, devicestatus.temp, devicestatus.lasttime])
         # Emit dataChanged signal for the entire table
-        self.modelDeviceSatus.layoutChanged.emit()
-        # self.modelDeviceSatus.dataChanged.emit(self.modelDeviceSatus.index(0, 0), self.modelDeviceSatus.index(0, 1))
-        # print(self.modelDeviceSatus._data)
+        self.modelDeviceStatus.layoutChanged.emit()
+        # self.modelDeviceStatus.dataChanged.emit(self.modelDeviceStatus.index(0, 0), self.modelDeviceStatus.index(0, 1))
+        # print(self.modelDeviceStatus._data)
 
 def parse_devicelocation(self, data, index):
     message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')

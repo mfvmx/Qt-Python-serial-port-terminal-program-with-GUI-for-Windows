@@ -136,10 +136,8 @@ T3_2 = [
 
 T3 = [T3_0, T3_1, T3_2]
 
+track_status_table = [] # holds track status data
 device_status_table = [] # holds status data
-
 device_location_table = [] # holds location data
-
 org_table = [] # holds organization data
-
 debug_table = [] # holds debug data

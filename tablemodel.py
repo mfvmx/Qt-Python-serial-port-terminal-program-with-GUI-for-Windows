@@ -5,6 +5,11 @@ from variables import *
 DID_col = "      DID      "
 flag_col = "    Flag    "
 battery_col = "  Batt  "
+ch1_col = "  Ch1  "
+ch2_col = "  Ch2  "
+ch3_col = "  Ch3  "
+ch4_col = "  Ch4  "
+com_count = "Command Count"
 ext_power_col = "  ExtPwr  "
 channel_col = "  Channel  "
 did1_col = "      DID1      "
@@ -20,12 +25,74 @@ unicast_col = " Unicast "
 lap_entry_col = " Lap Entry "
 lap_count_col = " Lap Count "
 
-class TableModelStatus(QAbstractTableModel):
+class TableModelTrackStatus(QAbstractTableModel): # Track Status Table Model
     def __init__(self, data):
         QAbstractTableModel.__init__(self)
         # super(CustomTableModel, self).__init__()
         self._data = data
-        self._headers = [DID_col, flag_col, battery_col, ext_power_col,rssi_col,temp_col,last_col]  # Define the column headers
+        self._headers = [com_count, flag_col, ch1_col, ch2_col, ch3_col, ch4_col]  # Define the column headers
+        self._sort_order = Qt.AscendingOrder
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole: # Add this block to display data
+            value = self._data[index.row()][index.column()]
+            # Default return value
+            return value
+
+        if role == Qt.TextAlignmentRole: # Add this block to center the text
+            return Qt.AlignVCenter + Qt.AlignHCenter
+
+        if role == Qt.DecorationRole: # Add this block to display icons
+            value = self._data[index.row()][index.column()]
+            if self._headers[index.column()] == flag_col:
+                if value == green_flag:
+                    return QIcon(green_flag_icon_path)
+                elif value == debris_white_local:
+                    return QIcon(debris_white_local_icon_path)
+                elif value == double_yellow_full_course_flag:
+                    return QColor(Qt.yellow)
+                elif value == checkered_flag:
+                    return QIcon(checkered_flag_icon_path)
+                elif value == black_flag:
+                    return QIcon(black_flag_icon_path)
+                elif value == blank_flag:
+                    return QIcon(blank_flag_icon_path)
+                elif value == purple_flag:
+                    return QIcon(purple_flag_icon_path)
+                elif value == red_flag:
+                    return QIcon(red_flag_icon_path)
+                elif value == debris_local:
+                    return QIcon(debris_local_icon_path)
+                elif value == waving_yellow_local:
+                    return QIcon(waving_yellow_local_icon_path)
+                elif value == white_local:
+                    return QIcon(white_local_icon_path)
+
+    def rowCount(self, index=QModelIndex()):
+        return len(self._data)
+
+    def columnCount(self, index=QModelIndex()):
+        return len(self._headers)
+
+    def headerData(self, section, orientation, role):
+        if role != Qt.DisplayRole:
+            return None
+        if orientation == Qt.Horizontal:
+            return self._headers[section]  # Return the appropriate header name
+        else:
+            return f"{section}"
+
+    def sort(self, column, order):
+        self.layoutAboutToBeChanged.emit()
+        self._data.sort(key=lambda x: x[column], reverse=(order == Qt.DescendingOrder))
+        self.layoutChanged.emit()
+
+class TableModelStatus(QAbstractTableModel): # Device Status Table Model
+    def __init__(self, data):
+        QAbstractTableModel.__init__(self)
+        # super(CustomTableModel, self).__init__()
+        self._data = data
+        self._headers = [DID_col, flag_col, battery_col, ext_power_col, rssi_col, temp_col, last_col]  # Define the column headers
         self._sort_order = Qt.AscendingOrder
 
     def data(self, index, role):
@@ -150,6 +217,14 @@ class TableModelLocation(QAbstractTableModel):
 
     def columnCount(self, index):
         return len(self._headers)
+
+    def get_location_data(self, did):
+        # Assuming self._data is a dictionary or list containing location data
+        for row in self._data:
+            print(row)
+            if row[0] == did:  # DID is the first column
+                return row[1], row[2]  # Return latitude and longitude
+        return None
 
     def headerData(self, section, orientation, role):
         if role != Qt.DisplayRole:
