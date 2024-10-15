@@ -3,14 +3,17 @@
 
 from PySide6.QtSerialPort import QSerialPort, QSerialPortInfo
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QApplication, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSizePolicy, QGridLayout, QSplitter, QMenu
+from PySide6.QtWidgets import QApplication, QLabel, QSlider, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSizePolicy, QGridLayout, QSplitter, QMenu, QMenuBar, QFileDialog
+from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
-from PySide6.QtCore import QFile, QIODevice, QThread, Signal
+from PySide6.QtCore import QFile, QIODevice, QThread, Signal, Slot, QObject, QTimer, Qt
 from PySide6.QtGui import QKeySequence, QShortcut, QAction
 import socket
 import sys
+import csv
 import folium
+import random
 from folium import JsCode
 from folium.plugins import Realtime
 import datetime
@@ -52,11 +55,36 @@ tab3Name = "TCP/IP"
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Create a menu bar
+        menu_bar = self.menuBar()
+
+        # Add a "File" menu
+        file_menu = menu_bar.addMenu("File")
+
+        # Add an "Open" action to the "File" menu
+        open_action = QAction("Open", self)
+        open_action.triggered.connect(self.open_file_dialog)
+        file_menu.addAction(open_action)
         # Initialize a buffer to store incoming data
         self.rx_buffer = bytearray()
-        # Initialize connection type (serial or tcpip)
-        # main_win.start_tcpip_connection('127.0.0.1', 12345)
-        # main_win.stop_tcpip_connection()
+        
+        # Add the slider below the port settings
+        self.speed_label = QLabel("Speed:")
+        self.speed_value_label = QLabel("50")  # Default value
+        self.speed_slider = QSlider(Qt.Horizontal)
+        self.speed_slider.setMinimum(0)
+        self.speed_slider.setMaximum(100)
+        self.speed_slider.setValue(50)  # Default value
+        # Connect the slider's valueChanged signal to a slot
+        self.speed_slider.valueChanged.connect(self.update_speed_value)
+
+        # Add the slider to the layout below the port settings
+        self.slider_container = QWidget()
+        self.slider_layout = QVBoxLayout(self.slider_container)
+        self.slider_layout.addWidget(self.speed_label)
+        self.slider_layout.addWidget(self.speed_slider)
+        self.slider_layout.addWidget(self.speed_value_label)
+        
         self.connection_type = 'serial'  # Default to serial
         self.tcp_client = TCPClient()
         self.tcp_client.sock.readyRead.connect(self.on_port_rx)
@@ -119,12 +147,19 @@ class MainWindow(QMainWindow):
 
         self.update_map()
         self.expose_map_js()
-
-        # Set the size policy of self.mapweb_view to expanding
-        # self.mapweb_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # Add self.mapweb_view to the layout with a higher stretch factor
-        # infovbox.addWidget(self.mapweb_view, stretch=2)
+        
+        # create Com port
+        self.port = ComPort(com_port_name, default_baud_rate,self)
+        self.port.ser.readyRead.connect(self.on_port_rx)
+        self.port.ser.errorOccurred.connect(self.port_error)
+        
+        # Create an instance of MapHandler and pass the speed_slider and port
+        self.map_handler = MapHandler(self.speed_slider, self.port, self)
+        
+        # Set up QWebChannel
+        self.channel = QWebChannel()
+        self.mapweb_view.page().setWebChannel(self.channel)
+        self.channel.registerObject("qt", self.map_handler)
 
         self.table_notebook = Notebook()
         # for i in range(self.table_notebook.count()):
@@ -160,12 +195,7 @@ class MainWindow(QMainWindow):
         self.controls.echo_box.toggled.connect(self.echo_box_toggled)
         # Connect the debug button to the debug mode method
         self.controls.debug_btn.clicked.connect(self.enable_debug_mode)
-
-        # create Com port
-        self.port = ComPort(com_port_name, default_baud_rate,self)
-        self.port.ser.readyRead.connect(self.on_port_rx)
-        self.port.ser.errorOccurred.connect(self.port_error)
-
+        
         # create any_panels and bind handlers
         self.any_panel_1 = SendAny()
         self.any_panel_2 = SendAny()
@@ -192,19 +222,19 @@ class MainWindow(QMainWindow):
         grid_layout.addWidget(splitter, 2, 0, 5, 3)  # notebook spans 1 row and 1 column
         grid_layout.addWidget(self.mapweb_view, 0, 3, 6, 6)  # mapweb_view spans 2 rows and 2 columns
         grid_layout.addWidget(self.port, 0, 0, 1, 2)  # port widget spans 1 row and 3 columns
-        # grid_layout.addWidget(self.controls, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
-        grid_layout.addWidget(self.tcp_client, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
+        grid_layout.addWidget(self.slider_container, 1, 0, 1, 2) # speed slider spans 1 row and 1 column
+        # grid_layout.addWidget(self.tcp_client, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_1, 1, 0, 1, 2)  # any_panel_1 spans 1 row and 1 column
         # grid_layout.addWidget(self.any_panel_2, 2, 0, 1, 1)  # any_panel_2 spans 1 row and 1 column
         # grid_layout.addWidget(self.notebook, 2, 0, 2, 1)  # notebook spans 1 row and 1 column
         # grid_layout.addWidget(self.table_notebook, 4, 0, 2, 1)  # table_notebook spans 3 rows and 1 column
         grid_layout.setRowStretch(5, 1)
         grid_layout.setColumnStretch(5, 2)
-        # vbox.addWidget(self.controls)
-        # vbox.addWidget(self.any_panel_1)
-        # vbox.addWidget(self.any_panel_2)
-        # vbox.addWidget(self.notebook)
 
+    def update_speed_value(self, value):
+        """Update the speed value label when the slider value changes."""
+        self.speed_value_label.setText(str(value))
+        
     def open_context_menu(self, position):
         current_index = self.table_notebook.currentIndex()
         tab = self.table_notebook.widget(current_index)
@@ -300,7 +330,60 @@ class MainWindow(QMainWindow):
             }}
         """
         self.mapweb_view.page().runJavaScript(js_code)
-        
+            
+    def add_or_update_polygon(self, polygon_id, coordinates, popup_text, color):
+        """Dynamically add or update a polygon with a custom color."""
+        js_code = f"""
+            (function() {{
+                // Initialize the polygons object if it doesn't exist
+                if (typeof window.polygons === 'undefined') {{
+                    window.polygons = {{}};
+                }}
+
+                // Log the coordinates for debugging
+                console.log('Coordinates for polygon {polygon_id}:', {coordinates});
+
+                // Check if coordinates are valid
+                if (!Array.isArray({coordinates}) || {coordinates}.length === 0 || {coordinates}[0] === null) {{
+                    console.error('Invalid coordinates for polygon {polygon_id}');
+                    return;
+                }}
+
+                // Create a custom style for the polygon
+                var customStyle = {{
+                    color: '{color}',
+                    fillColor: '{color}',
+                    fillOpacity: 0.5
+                }};
+
+                // Check if a polygon with this ID already exists
+                if (window.polygons['{polygon_id}']) {{
+                    // Update the existing polygon's coordinates and popup
+                    window.polygons['{polygon_id}'].setLatLngs({coordinates});
+                    window.polygons['{polygon_id}'].bindPopup('{popup_text}');
+                    console.log('Updated polygon {polygon_id} with new coordinates');
+                }} else {{
+                    // Add a new polygon with the custom style
+                    var polygon = L.polygon({coordinates}, customStyle).addTo(window.map).bindPopup('{popup_text}');
+                    window.polygons['{polygon_id}'] = polygon;  // Store the polygon by ID
+                    console.log('Added new polygon {polygon_id}');
+                }}
+
+                // Attach click event listener to the polygon
+                window.polygons['{polygon_id}'].on('click', function(e) {{
+                    var lat = e.latlng.lat;
+                    var lng = e.latlng.lng;
+                    console.log('Polygon {polygon_id} clicked at:', lat, lng);
+                    if (window.qt) {{
+                        window.qt.updateCoordinates(lat, lng);
+                    }}
+                    e.originalEvent.stopPropagation();  // Prevent event propagation to the map
+                }});
+            }})();
+        """
+        # Execute the JavaScript to dynamically add or update the polygon and attach event listener
+        self.mapweb_view.page().runJavaScript(js_code)
+
     def enable_developer_tools(self):
         """Enable Developer Tools in QWebEngineView."""
         # These settings can remain if you want to enable other attributes like JavaScript
@@ -415,11 +498,13 @@ class MainWindow(QMainWindow):
         """Render the Folium map and dynamically detect the map object."""
         # Render the folium map as usual
         data = self.map.get_root().render()
-
-        # Inject JavaScript to dynamically detect and expose the map object
+    
+        # Inject the QWebChannel script and JavaScript to dynamically detect and expose the map object
         data = data.replace(
-            "<script>",
-            """<script>
+            "<head>",
+            """<head>
+            <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+            <script>
             function waitForMap() {
                 // Search for the dynamically generated map object (window.map_*)
                 for (var key in window) {
@@ -430,21 +515,53 @@ class MainWindow(QMainWindow):
                         window.map.options.zoomSnap = 0.3;  // Zoom snap at 0.5 increments
                         window.map.options.zoomDelta = 0.3;  // Zoom step smaller when using scroll or buttons
                         console.log('Zoom settings adjusted: zoomSnap=0.5, zoomDelta=0.5');
+    
+                        // Initialize QWebChannel
+                        new QWebChannel(qt.webChannelTransport, function(channel) {
+                            window.qt = channel.objects.qt;
+                        });
+    
+                        // Add click event listener to the map
+                        window.map.on('click', function(e) {
+                            var lat = e.latlng.lat;
+                            var lng = e.latlng.lng;
+                            console.log('Map clicked at:', lat, lng);
+                            if (window.qt) {
+                                window.qt.updateCoordinates(lat, lng);
+                            }
+                        });
+    
+                        // Add click event listener to polygons
+                        for (var layer in window.map._layers) {
+                            if (window.map._layers[layer].feature && window.map._layers[layer].feature.geometry.type === 'Polygon') {
+                                window.map._layers[layer].on('click', function(e) {
+                                    var lat = e.latlng.lat;
+                                    var lng = e.latlng.lng;
+                                    console.log('Polygon clicked at:', lat, lng);
+                                    if (window.qt) {
+                                        window.qt.updateCoordinates(lat, lng);
+                                    }
+                                    e.originalEvent.stopPropagation();  // Prevent event propagation to the map
+                                });
+                            }
+                        }
+    
                         return;
                     }
                 }
-
+    
                 // Retry if the map is not yet initialized
                 console.log('Waiting for the map to initialize...');
                 setTimeout(waitForMap, 100);  // Retry every 100ms
             }
-
+    
             document.addEventListener("DOMContentLoaded", function() {
                 waitForMap();  // Start waiting for map initialization
             });
+            </script>
             """
         )
-
+    
         # Load the map into QWebEngineView
         self.mapweb_view.setHtml(data)
 
@@ -666,6 +783,102 @@ class MainWindow(QMainWindow):
     def port_error(self):
         self.indicate_port_error(self.port.ser.error())
 
+    def open_file_dialog(self):
+        # Open a file dialog to select a CSV file
+        file_name, _ = QFileDialog.getOpenFileName(self, "Open CSV File", "", "CSV Files (*.csv)")
+        if file_name:
+            self.load_zones_from_csv(file_name)
+    
+    def load_zones_from_csv(self, file_name):
+        zones = {}
+        with open(file_name, newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                try:
+                    zone_id = int(row[0])
+                    lat = float(row[1])
+                    lon = float(row[2])
+                    if zone_id not in zones:
+                        zones[zone_id] = []
+                    zones[zone_id].append([lat, lon])  # Ensure coordinates are pairs of [lat, lon]
+                except (ValueError, IndexError) as e:
+                    print(f"Error parsing row {row}: {e}")
+        self.add_zones_to_map(zones)
+
+    def add_zones_to_map(self, zones):
+        colors = ['blue', 'red', 'green', 'yellow', 'purple', 'orange', 'pink', 'brown']  # List of colors
+        for zone_id, coordinates in zones.items():
+            color = random.choice(colors)  # Select a random color
+            self.add_or_update_polygon(zone_id, coordinates, f"Zone {zone_id}", color)
+
+#from PySide6.QtCore import QObject, Slot
+
+class MapHandler(QObject):
+    def __init__(self, speed_slider, port, parent=None):
+        super().__init__(parent)
+        self.speed_slider = speed_slider
+        self.port = port
+        self.lat = None
+        self.lng = None
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.sendCoordinates)
+    
+    def convert_to_nmea(self, lat, lng):
+        """Convert latitude and longitude to NMEA format."""
+        def convert(coord, is_latitude):
+            degrees = int(coord)
+            minutes = abs(coord - degrees) * 60
+            direction = ''
+            if is_latitude:
+                direction = 'N' if degrees >= 0 else 'S'
+            else:
+                direction = 'E' if degrees >= 0 else 'W'
+            degrees = abs(degrees)
+            return f"{degrees:02d}{minutes:07.4f},{direction}"
+
+        lat_nmea = convert(lat, is_latitude=True)
+        lng_nmea = convert(lng, is_latitude=False)
+        return f"{lat_nmea},{lng_nmea},"
+        
+    def nmea0183_checksum(self, nmea_data):
+        """Calculate the NMEA 0183 checksum."""
+        crc = 0
+        for char in nmea_data:
+            crc ^= ord(char)
+        return crc
+    
+    @Slot(float, float)
+    def updateCoordinates(self, lat, lng):
+        """Update the coordinates and start the timer."""
+        self.lat = lat
+        self.lng = lng
+        if not self.timer.isActive():
+            self.timer.start(500)  # Send coordinates every 500ms
+            
+    def sendCoordinates(self):
+        """Send the coordinates and speed to the serial port."""
+        # Convert speed from mph to km/h
+        speed_mph = self.speed_slider.value()
+        speed_kmh = speed_mph * 1.609
+        begin_test = "$"
+        start_test = "PUBX,00,"
+        time_test= "181856.40,"
+        middle_test = "18.507,G2,8,5.8,"
+        points_end_spd = ",89.3,0.000,,3.23,1,1.17,20,0,0,"
+        check_sum_star = "*"
+        nmea_coords = self.convert_to_nmea(self.lat, self.lng)
+        coordinates = f"{self.lat},{self.lng},{speed_kmh}"
+        print(f"Sent coordinates: {coordinates}")
+        
+        # Construct the NMEA string
+        nmea_string = f"{start_test}{time_test}{nmea_coords}{middle_test}{speed_kmh}{points_end_spd}"
+        checksum = self.nmea0183_checksum(nmea_string)
+        nmea_string += f"{check_sum_star}{checksum:02X}"
+        nmea_string = f"{begin_test}{nmea_string}\r\n"
+        if self.port.com_opened:
+            self.port.write(nmea_string.encode())
+        print(f"Sent NMEA string: {nmea_string}")
+        
 
 def main():
     app = QApplication([])
