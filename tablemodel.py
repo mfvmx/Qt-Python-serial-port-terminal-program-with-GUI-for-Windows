@@ -3,6 +3,7 @@ from PySide6.QtGui import QColor, QIcon  # Import QIcon from QtGui
 from variables import *
 
 DID_col = "      DID      "
+DriverID_col = "   DriverID   "
 flag_col = "    Flag    "
 battery_col = "  Batt  "
 ch1_col = "  Ch1  "
@@ -22,8 +23,10 @@ rssi_col = "RSSI"
 temp_col = "Temp"
 last_col = "Lastseen"
 unicast_col = " Unicast "
-lap_entry_col = " Lap Entry "
+lap_entry_col = "   Lap Entry   "
 lap_count_col = " Lap Count "
+pit_entry_col = "   Pit Entry   "
+pit_duration_col = " Pit Duration "
 
 class TableModelTrackStatus(QAbstractTableModel): # Track Status Table Model
     def __init__(self, data):
@@ -151,19 +154,18 @@ class TableModelStatus(QAbstractTableModel): # Device Status Table Model
         self._data.sort(key=lambda x: x[column], reverse=(order == Qt.DescendingOrder))
         self.layoutChanged.emit()
 
-class CustomTableModelPitTime(QAbstractTableModel):
+class CustomTableModelDriverID(QAbstractTableModel):
     def __init__(self, data):
         QAbstractTableModel.__init__(self)
         # super(CustomTableModel, self).__init__()
         self._data = data
-        self._headers = [DID_col, "Entry", "Exit"]  # Define the column headers
+        self._headers = [DID_col, DriverID_col]  # Define the column headers
         self._sort_order = Qt.AscendingOrder
 
     def data(self, index, role):
         if role == Qt.DisplayRole: # Add this block to display data
-            value = self._data[index.row()][index.column()]
-            if self._headers[index.column()] == battery_col or self._headers[index.column()] == ext_power_col:
-                return f"{value*0.03:.2f}v"
+            if index.column() < len(self._data[index.row()]):
+                value = self._data[index.row()][index.column()]
             # Default return value
             return value
 
@@ -183,7 +185,114 @@ class CustomTableModelPitTime(QAbstractTableModel):
             return self._headers[section]  # Return the appropriate header name
         else:
             return f"{section}"
+        
+class CustomTableModelLapTime(QAbstractTableModel):
+    def __init__(self, data):
+        super().__init__()
+        self._data = data
+        self._headers = [DID_col, lap_entry_col, lap_count_col, "Formatted Time", "Time Difference"]  # Add new column header
+        self._sort_order = Qt.AscendingOrder
 
+    def data(self, index, role):
+        if role == Qt.DisplayRole:  # Display data in cells
+            if index.column() < len(self._data[index.row()]):
+                value = self._data[index.row()][index.column()]
+            
+            if self._headers[index.column()] == lap_entry_col:
+                return value  # Return raw lap entry value
+            
+            elif self._headers[index.column()] == "Formatted Time":
+                raw_value = self._data[index.row()][self._headers.index(lap_entry_col)]
+                hours = raw_value // 3600000
+                minutes = (raw_value % 3600000) // 60000
+                seconds = (raw_value % 60000) // 1000
+                milliseconds = raw_value % 1000
+                return f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}"
+            
+            elif self._headers[index.column()] == "Time Difference":
+                return self.get_time_difference(index.row())  # Compute time difference
+
+            return value  # Default return value for other columns
+
+        if role == Qt.TextAlignmentRole:  # Center text
+            return Qt.AlignVCenter + Qt.AlignHCenter
+
+    def get_time_difference(self, current_row):
+        """Calculate the time difference between the current and previous lap."""
+        current_did = self._data[current_row][self._headers.index(DID_col)]
+        current_entry_time = self._data[current_row][self._headers.index(lap_entry_col)]
+
+        # Find the previous lap for the same DID
+        previous_entry_time = None
+        for row in reversed(self._data[:current_row]):
+            if row[self._headers.index(DID_col)] == current_did:
+                previous_entry_time = row[self._headers.index(lap_entry_col)]
+                break
+
+        if previous_entry_time is None:
+            return "N/A"  # No previous lap entry
+
+        time_diff = current_entry_time - previous_entry_time
+        minutes = (time_diff // 60000) % 60
+        seconds = (time_diff // 1000) % 60
+        milliseconds = time_diff % 1000
+        return f"{minutes:02}:{seconds:02}.{milliseconds:03}"
+
+    def rowCount(self, index):
+        return len(self._data)
+
+    def columnCount(self, index):
+        return len(self._headers)
+
+    def headerData(self, section, orientation, role):
+        if role != Qt.DisplayRole:
+            return None
+        if orientation == Qt.Horizontal:
+            return self._headers[section]  # Return the appropriate header name
+        else:
+            return f"{section + 1}"  # Return row numbers starting from 1
+
+
+class CustomTableModelPitTime(QAbstractTableModel):
+    def __init__(self, data):
+        QAbstractTableModel.__init__(self)
+        # super(CustomTableModel, self).__init__()
+        self._data = data
+        self._headers = [DID_col, pit_entry_col, pit_duration_col, "Formatted Time"]  # Define the column headers
+        self._sort_order = Qt.AscendingOrder
+
+    def data(self, index, role):
+        if role == Qt.DisplayRole: # Add this block to display data
+            if index.column() < len(self._data[index.row()]):
+                value = self._data[index.row()][index.column()]
+            if self._headers[index.column()] == pit_entry_col:
+                return value  # Return raw value
+            elif self._headers[index.column()] == "Formatted Time":
+                raw_value = self._data[index.row()][self._headers.index(pit_entry_col)]
+                hours = raw_value // 3600
+                minutes = (raw_value % 3600) // 60
+                seconds = raw_value % 60
+                return f"{hours:02}:{minutes:02}:{seconds:02}"
+            # Default return value
+            return value
+
+        if role == Qt.TextAlignmentRole: # Add this block to center the text
+            return Qt.AlignVCenter + Qt.AlignHCenter
+
+    def rowCount(self, index):
+        return len(self._data)
+
+    def columnCount(self, index):
+        return len(self._headers)
+
+    def headerData(self, section, orientation, role):
+        if role != Qt.DisplayRole:
+            return None
+        if orientation == Qt.Horizontal:
+            return self._headers[section]  # Return the appropriate header name
+        else:
+            return f"{section}"
+        
 class TableModelLocation(QAbstractTableModel):
     def __init__(self, data):
         QAbstractTableModel.__init__(self)
@@ -221,7 +330,6 @@ class TableModelLocation(QAbstractTableModel):
     def get_location_data(self, did):
         # Assuming self._data is a dictionary or list containing location data
         for row in self._data:
-            print(row)
             if row[0] == did:  # DID is the first column
                 return row[1], row[2]  # Return latitude and longitude
         return None

@@ -6,7 +6,7 @@ from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import QApplication, QMainWindow, QTableView, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QSizePolicy, QGridLayout, QSplitter, QMenu
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
-from PySide6.QtCore import QFile, QIODevice, QThread, Signal
+from PySide6.QtCore import QFile, QIODevice, QThread, Signal, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut, QAction
 import socket
 import sys
@@ -73,17 +73,20 @@ class MainWindow(QMainWindow):
         # create vertical layout
         # infovbox = QHBoxLayout(central_widget)
         grid_layout = QGridLayout(central_widget)
-        self.modelPitTimes = CustomTableModelPitTime(device_status_table)
+        self.modelPitTimes = CustomTableModelPitTime(pit_time_table)
+        self.modelLapTimes = CustomTableModelLapTime(lap_time_table)
+        self.modelDriverID = CustomTableModelDriverID(driver_id_table)
         self.modelTrackStatus = TableModelTrackStatus(track_status_table)
         self.modelDeviceStatus = TableModelStatus(device_status_table)
         self.modelDeviceLocation = TableModelLocation(device_location_table)
         self.modelOrgSettings = TableModelOrgSettings(org_table)
         self.modelDebug = TableModelDebug(debug_table)
 
-        # create hbox (horizontal layout)
-        # sidebox = QVBoxLayout()
-        # verticalTableLayout = infovbox()
-        # infovbox.addLayout(sidebox)
+        # Initialize QTimer
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.send_request_messages)
+        self.timer.start(1000)  # 1000 milliseconds = 1 second
+        
         # create term
         self.term = QTextEdit()
         self.term.setReadOnly(True)
@@ -98,16 +101,17 @@ class MainWindow(QMainWindow):
         )
         # sidebox.addWidget(self.term)
         # infovbox.addWidget(self.term) # Bottom of the window
-        self.map = folium.Map(location=[34.14400, -83.816108], zoom_start=16)
-
-            # Add Esri World Imagery (satellite view)
-        folium.TileLayer(
+        self.map = folium.Map(location=[34.14400, -83.816108], zoom_start=16, control_scale=True, tiles=None)
+        
+        # Add Esri World Imagery (satellite view)
+        esri_layer = folium.TileLayer(
             tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
             attr="Esri",
             name="Esri Satellite",
             overlay=False,
             control=True
-        ).add_to(self.map)
+        )
+        esri_layer.add_to(self.map)
         # Add LayerControl to switch between different views
         folium.LayerControl().add_to(self.map)
         self.mapweb_view = QWebEngineView()
@@ -137,9 +141,11 @@ class MainWindow(QMainWindow):
         self.table_notebook.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table_notebook.customContextMenuRequested.connect(self.open_context_menu)
         self.table_notebook.add_tab_tableview("Status", self.modelDeviceStatus, self.send)
-        self.table_notebook.add_tab_tableview("Pit Times", self.modelPitTimes, self.send)
         self.table_notebook.add_tab_tableview("Location", self.modelDeviceLocation, self.send)
         self.table_notebook.add_tab_tableview("Track Status", self.modelTrackStatus, self.send)
+        self.table_notebook.add_tab_tableview("Lap Times", self.modelLapTimes, self.send)
+        self.table_notebook.add_tab_tableview("Pit Times", self.modelPitTimes, self.send)
+        self.table_notebook.add_tab_tableview("Driver IDs", self.modelDriverID , self.send)
         self.table_notebook.add_tab_tableview("Debug", self.modelDebug, self.send)
         self.table_notebook.add_tab_tableview("Org Settings", self.modelOrgSettings, self.send)
         # self.table_notebook.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
@@ -368,6 +374,13 @@ class MainWindow(QMainWindow):
         self.term.insertPlainText("-" * 50 + "\r")
         self.term.ensureCursorVisible()
 
+    def send_request_messages(self):
+        """Send two serial messages every second."""
+        message1 = b'\x24\x42\x50\x6E\x23' # Request for lap times
+        message2 = b'\x24\x42\x45\x79\x23' # Request for pit times
+        self.write(message1)
+        self.write(message2)
+
     def write(self, data):
         if self.port.com_opened:
             self.port.write(data)
@@ -576,7 +589,7 @@ class MainWindow(QMainWindow):
             message_length = int.from_bytes(self.rx_buffer[3:5], byteorder='little')  # Variable length messages
             # message_length = 6 + (self.rx_buffer[2] << 8 | self.rx_buffer[3])  # Variable length messages
         else:
-            print("Unknown message type")
+            # print("Unknown message type")
             return False  # Unknown message type
         # if len(self.rx_buffer) < message_length:
         #     print("Not enough data to extract complete message")

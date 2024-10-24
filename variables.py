@@ -81,7 +81,8 @@ T1 = [T1_0, T1_1]
 T2_0 = [
     ["org:SCCA-Pit45-3v2", b'\x24\x4F\x57\x28\x00\x01\x03\x00\x02\x01\x00\x02\x00\x03\x04\x05\x06\x07\x00\x08\x00\xEE\x02\x0C\x2D\x2E\x32\x0A\x00\x06\x00\xA8\x61\x00\x00\x7C\xFF\xFF\xFF\xED\x23', "", "#85c6ff"],
     ["org:Default-0v0", b'\x24\x4F\x57\x28\x00\x01\x00\x00\x00\x01\x00\x02\x00\x03\x04\x05\x06\x07\x00\x08\x00\xEE\x02\x0C\x2D\x2E\x32\x0A\x00\x06\x00\xA8\x61\x00\x00\x7C\xFF\xFF\xFF\xF2\x23', "", "#c9c3c9"],
-    ["AT+CREG?", "AT+CREG?", "", ""],
+    ["MultZoneTest", b'\x24\x4F\x41\x0C\x00\x0A\x01\x0B\x02\x0C\x19\x27\x23', "", ""],
+    ["Clear All Locals", b'\x24\x44\x41\x80\x00\xFB\x23', "", ""],
     ["AT+CREG=0", "AT+CREG=0", "", ""],
     ["AT+CREG=1", "AT+CREG=1", "", ""],
     ["AT+CREG=2", "AT+CREG=2", "", ""],
@@ -138,6 +139,9 @@ T3 = [T3_0, T3_1, T3_2]
 
 track_status_table = [] # holds track status data
 device_status_table = [] # holds status data
+pit_time_table = [] # holds pit time data
+lap_time_table = [] # holds lap time data
+driver_id_table = [] # holds driver ID data
 device_location_table = [] # holds location data
 org_table = [] # holds organization data
 debug_table = [] # holds debug data

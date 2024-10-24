@@ -39,13 +39,30 @@ class DeviceStatusList:
         return f"DeviceStatusList(did={self.did}, flag={self.flag}, batv={self.batv}, extv={self.extv}, rssi={self.rssi}, temp={self.temp}, lasttime={self.lasttime})"
 
 class DevicePitTime:
-    def __init__(self, did, entrytime, exittime):
+    def __init__(self, did, entrytime, duration):
         self.did = did
         self.entrytime = entrytime
-        self.exittime = exittime
+        self.duration = duration
 
     def __repr__(self):
-        return f"DevicePitTime(did={self.did}, entrytime={self.entrytime}, exittime={self.exittime})"
+        return f"DevicePitTime(did={self.did}, entrytime={self.entrytime}, duration={self.duration})"
+    
+class DeviceLapTime:
+    def __init__(self, did, entrytime, lapcount):
+        self.did = did
+        self.entrytime = entrytime
+        self.lapcount = lapcount
+
+    def __repr__(self):
+        return f"DeviceLapTime(did={self.did}, entrytime={self.entrytime}, exittime={self.lapcount})"
+    
+class DeviceDriverID:
+    def __init__(self, did, driver_id):
+        self.did = did
+        self.driver_id = driver_id
+
+    def __repr__(self):
+        return f"DeviceDriverID(did={self.did}, driver_id={self.driver_id})"
 
 class DeviceLocation:
     def __init__(self, did, latitude, longitude, speed, zone, last_seen):
@@ -113,6 +130,8 @@ def check_for_sequence(self, data):
     # device_status_table[0][1] = message_length
     if command_type == pittime:
         parse_pittime(self, data, 0)
+    elif command_type == laptime:
+        parse_laptime(self, data, 0)
     elif command_type == devicelocation:
         parse_devicelocation(self, data, 0)
     elif command_type == devicestatus:
@@ -121,6 +140,8 @@ def check_for_sequence(self, data):
         parse_orgsettings(self, data, 0)
     elif command_type == trackstatus:
         parse_trackstatus(self, data, 0)    
+    elif command_type == driver_id:
+        parse_driver_id(self, data, 0)   
     else:
         print(f"Unknown command type: {hex(command_type)}")
     # self.modelDeviceStatus.layoutChanged.emit()
@@ -131,28 +152,94 @@ def check_for_sequence(self, data):
 def parse_pittime(self, data, index):
     message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
     devicepittimelists = []
+    
+    # Parse the incoming data to create DevicePitTime entries
     for i in range(message_length // 12):
         start = index + 5 + i * 12
         did = int.from_bytes(data[start:start + 4], byteorder='little')
         entrytime = int.from_bytes(data[start + 4:start + 8], byteorder='little')
-        exittime = int.from_bytes(data[start + 8:start + 12], byteorder='little')
-        devicepittimelists.append(DevicePitTime(did, entrytime, exittime))
+        duration = int.from_bytes(data[start + 8:start + 12], byteorder='little')
+        # Ignore entries with did equal to 20000139
+        if did == 20000139:
+            continue
+        if did == 20000581:
+            print(f"Device ID: {did}, Entry Time: {entrytime}, Duration: {duration}")
+        devicepittimelists.append(DevicePitTime(did, entrytime, duration))
+    
+    # Process each device pit time entry
     for devicepittime in devicepittimelists:
-        did_exists = False
+        updated = False  # Track if we found and updated an entry
+
+        # Loop through all existing pit times to check for matches
         for row in self.modelPitTimes._data:
-            if row[0] == devicepittime.did:
-                row[1] = devicepittime.entrytime
-                row[2] = devicepittime.exittime
+            if row[0] == devicepittime.did and row[1] == devicepittime.entrytime:
+                # Update the duration if both did and entrytime match
+                row[2] = devicepittime.duration
+                updated = True
+                # Emit dataChanged signal for the updated row
+                self.modelPitTimes.layoutChanged.emit()
+                break  # No need to continue searching once we've updated
+        
+        # If no matching entry was found, append a new entry
+        if not updated:
+            self.modelPitTimes._data.append([devicepittime.did, devicepittime.entrytime, devicepittime.duration])
+            self.modelPitTimes.layoutChanged.emit()
+
+def parse_laptime(self, data, index):
+    message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
+    devicelaptimelists = []
+    
+    # Parse the incoming data to create DeviceLapTime entries
+    for i in range(message_length // 12):
+        start = index + 5 + i * 12
+        did = int.from_bytes(data[start:start + 4], byteorder='little')
+        entrytime = int.from_bytes(data[start + 4:start + 8], byteorder='little')
+        lapcount = int.from_bytes(data[start + 8:start + 12], byteorder='little')
+        # Ignore entries with did equal to 20000139
+        if did == 20000139:
+            continue
+        devicelaptimelists.append(DeviceLapTime(did, entrytime, lapcount))
+    # Process each device lap time entry
+    for devicelaptime in devicelaptimelists:
+        found_matching_did = False
+        found_matching_entrytime = False
+
+        # Loop through all existing lap times to check for matches
+        for row in self.modelLapTimes._data:
+            if row[0] == devicelaptime.did:
+                found_matching_did = True
+                if row[1] == devicelaptime.entrytime:
+                    found_matching_entrytime = True
+                    break  # Both did and entrytime match, no need to add this entry
+
+        # Add a new entry if no matching entrytime was found for the did
+        if not found_matching_entrytime:
+            self.modelLapTimes._data.append([devicelaptime.did, devicelaptime.entrytime, devicelaptime.lapcount])
+            self.modelLapTimes.layoutChanged.emit()
+
+def parse_driver_id(self, data, index):
+    message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
+    devicedriver_idlists = []
+    for i in range(message_length // 10):
+        start = index + 5 + i * 10
+        did = int.from_bytes(data[start:start + 4], byteorder='little')
+        driver_id = int.from_bytes(data[start + 4:start + 8], byteorder='little')
+        devicedriver_idlists.append(DeviceDriverID(did, driver_id))
+    for devicedriver_id in devicedriver_idlists:
+        did_exists = False
+        for row in self.modelDriverID._data:
+            if row[0] == devicedriver_id.did:
+                row[1] = devicedriver_id.driver_id
                 did_exists = True
                 break
         if not did_exists:
-            self.modelPitTimes._data.append([devicepittime.did, devicepittime.entrytime, devicepittime.exittime])
-        self.modelPitTimes.layoutChanged.emit()
+            self.modelDriverID._data.append([devicedriver_id.did, devicedriver_id.driver_id])
+        self.modelDriverID.layoutChanged.emit()
 
 def parse_trackstatus(self, data, index):
     message_length = int.from_bytes(data[index + 3:index + 5], byteorder='little')
-    # print(f'parse_trackstatus: {" ".join(f"{byte:02X}" for byte in data)}')
-    # print(f'Message Type: {hex(trackstatus)}, Message Length: {message_length}')
+    print(f'parse_trackstatus: {" ".join(f"{byte:02X}" for byte in data)}')
+    print(f'Message Length: {message_length}')
     trackstatuslists = []
     start = index + 5
     # print(f'Start: {start}, values: {hex(data[start])}')
@@ -163,6 +250,12 @@ def parse_trackstatus(self, data, index):
     ch2 = data[start + 6]
     ch3 = data[start + 7]
     ch4 = data[start + 8]
+    if message_length > 15:
+        for i in range((message_length - 14) // 2):
+            start = index + 14 + i * 2
+            print(f'Start: {start}, values: {hex(data[start])}, values: {hex(data[start + 1])}')
+            local_zone = data[start]
+            flag_byte = data[start + 1]
     trackstatuslists.append(TrackStatusList(commandcount, flag, ch1, ch2, ch3, ch4))
     # lrc = data[index + message_length - 1]
     # endofmessage = data[index + message_length]
